@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { BRAND } from "@/lib/brand";
 import { Container } from "./ui";
+import { AccountLink } from "./AccountLink";
 
 const NAV = [
   { href: "/how-it-works", label: "How it works" },
@@ -36,6 +37,7 @@ export function Header() {
                 {item.label}
               </Link>
             ))}
+            <AccountLink />
             <Link
               href="/#waitlist"
               className="rounded-full bg-accent px-5 py-2 text-sm font-semibold text-paper transition-colors hover:bg-accent-hover"
@@ -75,6 +77,7 @@ export function Header() {
                   {item.label}
                 </Link>
               ))}
+              <AccountLink onNavigate={() => setOpen(false)} />
               <Link
                 href="/#waitlist"
                 onClick={() => setOpen(false)}
