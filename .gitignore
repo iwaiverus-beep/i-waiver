@@ -1,0 +1,28 @@
+# Secrets — never commit
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Claude Code — personal settings and local permission grants
+.claude/settings.local.json
+
+# Supabase CLI
+.branches/
+.temp/
+supabase/.temp/
+
+# Vercel
+.vercel
+
+# Node
+node_modules/
+.next/
+out/
+npm-debug.log*
+yarn-error.log*
+
+# OS
+Thumbs.db
+.DS_Store

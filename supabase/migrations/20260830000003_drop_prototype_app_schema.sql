@@ -1,0 +1,23 @@
+-- Remove the `app` schema left behind by an earlier prototype.
+--
+-- Background: the project was scaffolded in a Claude prototyping session that created
+-- tables directly against the database rather than through migrations. The result was
+-- 19 tables under `app` duplicating the core of the model, with no migration file
+-- backing them and no entry in supabase_migrations.schema_migrations.
+--
+-- Why remove rather than keep:
+--   * `public` is a strict superset — it adds the insurance layer (quotes, policies,
+--     payments), the service boundary (coverage_contexts, partners,
+--     partner_integrations), AI intake, and identity_verifications.
+--   * `public` is reproducible from files under version control. `app` is not.
+--   * PostgREST exposes `public` by default. Two schemas with identical table names is
+--     a standing invitation for the application to read one while migrations maintain
+--     the other.
+--
+-- Safety at time of writing: every table in `app` held zero rows, verified via
+-- `supabase inspect db table-stats`. Nothing is being discarded but empty structure.
+--
+-- CASCADE is required: the prototype's own constraints, indexes, policies and any
+-- triggers live inside the schema and must go with it.
+
+drop schema if exists app cascade;
