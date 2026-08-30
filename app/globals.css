@@ -1,0 +1,22 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-paper text-ink antialiased;
+    font-feature-settings: "kern" 1, "liga" 1, "cv05" 1;
+  }
+  ::selection {
+    @apply bg-accent-soft text-ink;
+  }
+}
+
+@layer components {
+  .prose-body p {
+    @apply text-ink-soft leading-relaxed;
+  }
+}
