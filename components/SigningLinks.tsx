@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { QrCode } from "./QrCode";
 
 /**
  * Issues a fresh signing link for one of the parties.
@@ -25,8 +26,12 @@ export function SigningLinks({
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function issue(role: "lender" | "borrower", deliver: boolean) {
-    setBusy(role);
+  async function issue(
+    role: "lender" | "borrower",
+    deliver: boolean,
+    busyKey: string = role,
+  ) {
+    setBusy(busyKey);
     setError(null);
     setNotice(null);
     setLink(null);
@@ -70,6 +75,16 @@ export function SigningLinks({
 
         {!borrowerSigned && (
           <button
+            onClick={() => issue("borrower", false, "borrower-qr")}
+            disabled={busy !== null}
+            className="rounded-full bg-ink px-5 py-2.5 text-sm font-semibold text-paper transition-colors hover:bg-ink-soft disabled:opacity-50"
+          >
+            {busy === "borrower-qr" ? "One moment…" : "They are here — show a QR code"}
+          </button>
+        )}
+
+        {!borrowerSigned && (
+          <button
             onClick={() => issue("borrower", true)}
             disabled={busy !== null}
             className="rounded-full border border-line px-5 py-2.5 text-sm font-semibold text-ink transition-colors hover:border-ink/40 disabled:opacity-50"
@@ -97,6 +112,19 @@ export function SigningLinks({
             Good for 48 hours, usable once. It is not stored anywhere you can read it
             again — if you lose it, ask for another.
           </p>
+
+          {/* The same capability, in the form that works when both people are
+              standing next to the thing being lent. */}
+          <div className="mt-6 border-t border-line pt-6">
+            <QrCode
+              url={link.url}
+              label={
+                link.role === "lender"
+                  ? "Point your own phone at this to sign on it instead."
+                  : `Have ${borrowerName} point their camera at this. It opens the agreement on their own phone — no app, no account.`
+              }
+            />
+          </div>
         </div>
       )}
     </div>
