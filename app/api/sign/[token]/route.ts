@@ -11,6 +11,7 @@ type Body = {
   method?: unknown;
   typed_name?: unknown;
   drawn_png?: unknown;
+  biometric?: unknown;
   consented?: unknown;
   is_adult?: unknown;
   holds_education_card?: unknown;
@@ -35,7 +36,12 @@ export async function POST(
     const body = await readJson<Body>(request);
     const db = serviceClient();
 
-    const method = body.method === "drawn" ? "drawn" : "typed";
+    const method =
+      body.method === "drawn"
+        ? "drawn"
+        : body.method === "biometric"
+          ? "biometric"
+          : "typed";
     const drawn = typeof body.drawn_png === "string" ? body.drawn_png : null;
 
     const outcome = await recordSignature(db, {
@@ -43,6 +49,11 @@ export async function POST(
       method,
       typedName: text(body.typed_name, 120),
       drawnPng: drawn && drawn.startsWith("data:image/png;base64,") ? drawn : null,
+      // Passed through unvalidated on purpose: recordSignature verifies it
+      // against the session's own document hash, which is the only check that
+      // means anything. Shape-checking it here would imply a guarantee this
+      // layer cannot give.
+      biometric: body.biometric ?? null,
       consented: body.consented === true,
       attestations: {
         isAdult: body.is_adult === true,

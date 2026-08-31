@@ -376,6 +376,16 @@ export async function renderAgreementPdf(input: {
     } else if (sig.typedName) {
       L.text(sig.typedName, { font: fonts.serif, size: 18 });
       L.gap(4);
+    } else if (sig.method === "biometric") {
+      // There is no mark to draw. Saying so plainly is better than an empty
+      // rule that reads as a signature nobody got round to making.
+      L.text(sig.displayName, { font: fonts.serif, size: 18 });
+      L.gap(2);
+      L.text(
+        "Signed on the signer's own device, confirmed by Face ID, Touch ID or device passcode.",
+        { size: 8, color: MUTED },
+      );
+      L.gap(4);
     }
 
     L.page.drawLine({

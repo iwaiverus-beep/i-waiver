@@ -7,6 +7,7 @@ import { assembleAgreement, type AssembledDocument } from "@/lib/render/agreemen
 import { executeAgreement, SIGNATURES_BUCKET, TransitionRefused } from "@/lib/agreements/lifecycle";
 import { hashToken, sha256Hex } from "@/lib/tokens";
 import { bindCoverage } from "@/lib/coverage/client";
+import { verifyBiometricSignature, type VerifiedAssertion } from "@/lib/webauthn";
 
 /**
  * The borrower's session.
@@ -152,10 +153,12 @@ export async function resolveSigningSession(
 
 export type SignInput = {
   token: string;
-  method: "typed" | "drawn";
+  method: "typed" | "drawn" | "biometric";
   typedName?: string | null;
   /** data:image/png;base64,... from the signature pad. */
   drawnPng?: string | null;
+  /** The raw WebAuthn registration response, verified server-side. */
+  biometric?: unknown;
   attestations: Attestations;
   consented: boolean;
   /** Quote ids the signer chose to buy, if any. */
@@ -195,6 +198,9 @@ export async function recordSignature(
   }
   if (input.method === "drawn" && !input.drawnPng) {
     throw new TransitionRefused("Draw your signature to sign.");
+  }
+  if (input.method === "biometric" && !input.biometric) {
+    throw new TransitionRefused("Your device did not return a signature.");
   }
 
   // The gate runs against this signer's own attestations, and a blocking failure
@@ -267,6 +273,18 @@ export async function recordSignature(
     }
   }
 
+  // Verified here, immediately before the insert, and bound to this session's
+  // own document hash. Passing the hash from the session rather than from the
+  // request is what stops a caller signing one document and presenting it as a
+  // signature over another.
+  let assertion: VerifiedAssertion | null = null;
+  if (input.method === "biometric") {
+    assertion = await verifyBiometricSignature({
+      response: input.biometric as never,
+      documentHash: session.document.documentHash,
+    });
+  }
+
   const signedAt = new Date().toISOString();
 
   const { error: signatureError } = await db.from("signatures").insert({
@@ -277,6 +295,8 @@ export async function recordSignature(
     // Binds the signature to the exact wording. Without this the signature proves
     // far less than it appears to.
     document_hash_at_signing: session.document.documentHash,
+    device_assertion: assertion,
+    user_verified: assertion ? assertion.user_verified : null,
     signed_at: signedAt,
     ip: input.context.ip,
     user_agent: input.context.userAgent,
@@ -307,6 +327,12 @@ export async function recordSignature(
     payload: {
       method: input.method,
       document_hash_at_signing: session.document.documentHash,
+      // The credential id is enough to tie the audit entry to the signature row.
+      // The public key and the rest stay on that row rather than being copied
+      // into an append-only table that can never be corrected.
+      ...(assertion
+        ? { user_verified: true, credential_id: assertion.credential_id }
+        : {}),
     },
     context: input.context,
   });

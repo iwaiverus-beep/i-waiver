@@ -1,5 +1,7 @@
 "use client";
 
+import { BiometricSign } from "./BiometricSign";
+
 import { useEffect, useRef, useState } from "react";
 import { formatCents } from "@/lib/format";
 
@@ -51,7 +53,7 @@ export function SigningFlow({
   const [holdsCard, setHoldsCard] = useState(false);
   const [consented, setConsented] = useState(false);
 
-  const [method, setMethod] = useState<"typed" | "drawn">("typed");
+  const [method, setMethod] = useState<"typed" | "drawn" | "biometric">("typed");
   const [typedName, setTypedName] = useState(signerName);
 
   const [busy, setBusy] = useState(false);
@@ -102,14 +104,16 @@ export function SigningFlow({
     });
   }
 
-  async function submit() {
+  async function submit(biometric?: unknown) {
     setBusy(true);
     setError(null);
     setReasons([]);
 
-    const drawnPng = method === "drawn" ? padRef.current?.toDataUrl() ?? null : null;
+    const effectiveMethod = biometric ? "biometric" : method;
+    const drawnPng =
+      effectiveMethod === "drawn" ? padRef.current?.toDataUrl() ?? null : null;
 
-    if (method === "drawn" && (!drawnPng || padRef.current?.isEmpty())) {
+    if (effectiveMethod === "drawn" && (!drawnPng || padRef.current?.isEmpty())) {
       setError("Draw your signature in the box first.");
       setBusy(false);
       return;
@@ -119,9 +123,10 @@ export function SigningFlow({
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        method,
+        method: effectiveMethod,
         typed_name: typedName,
         drawn_png: drawnPng,
+        biometric: biometric ?? null,
         consented,
         is_adult: isAdult,
         holds_education_card: holdsCard,
@@ -296,6 +301,9 @@ export function SigningFlow({
           <Tab active={method === "drawn"} onClick={() => setMethod("drawn")}>
             Draw it
           </Tab>
+          <Tab active={method === "biometric"} onClick={() => setMethod("biometric")}>
+            Face ID
+          </Tab>
         </div>
 
         {method === "typed" ? (
@@ -306,8 +314,22 @@ export function SigningFlow({
               className="w-full rounded-xl border border-line bg-paper px-5 py-4 font-serif text-2xl text-ink outline-none focus:border-accent"
             />
           </div>
-        ) : (
+        ) : method === "drawn" ? (
           <SignaturePad ref={padRef} />
+        ) : (
+          <div className="mt-4">
+            <BiometricSign
+              documentHash={documentHash}
+              signerName={signerName}
+              disabled={!consented}
+              onSigned={(response) => submit(response)}
+            />
+            {!consented && (
+              <p className="mt-3 text-xs text-flag">
+                Agree to sign electronically first.
+              </p>
+            )}
+          </div>
         )}
       </section>
 
@@ -325,13 +347,15 @@ export function SigningFlow({
       )}
 
       <div>
+        {method !== "biometric" && (
         <button
-          onClick={submit}
+          onClick={() => submit()}
           disabled={busy || !consented}
           className="w-full rounded-full bg-accent px-6 py-4 text-base font-semibold text-paper transition-colors hover:bg-accent-hover disabled:opacity-40"
         >
           {busy ? "Recording…" : selectedTotal > 0 ? `Sign and take the cover — ${formatCents(selectedTotal)}` : "Sign"}
         </button>
+        )}
         <p className="mt-3 break-all text-center font-mono text-[10px] leading-relaxed text-ink-muted">
           Signing binds you to this exact wording: {documentHash}
         </p>
