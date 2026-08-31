@@ -33,9 +33,16 @@ The borrower's signing link is shown in the terminal and on the agreement page.
 ### 2. Database
 
 ```bash
-npx supabase link --project-ref <ref>
-npx supabase db push
+node scripts/db-push.mjs           # dry run: lists what is pending
+node scripts/db-push.mjs --apply
 ```
+
+Not `supabase db push`. The CLI rejects the newer `sbp_v0_` personal access token
+format, and an ambient `SUPABASE_ACCESS_TOKEN` (a publishable `sb_publ...` key on
+at least one machine here) shadows the real one regardless. The script drives the
+Management API instead and records each migration in
+`supabase_migrations.schema_migrations`, so `supabase migration list` still agrees
+with reality.
 
 Six migrations. The last two are new: `20260830000005_runtime_functions.sql` adds
 the render guard, the shared audit-hash function, the chain verifier and the
@@ -57,10 +64,17 @@ publishes it.
 To exercise the flow locally:
 
 ```bash
-psql "$DEV_DATABASE_URL" -f supabase/seed/dev_publish_specimen_clauses.sql
+node scripts/db-run.mjs supabase/seed/dev_publish_specimen_clauses.sql --apply
 ```
 
-Read the header of that file before running it against anything you care about.
+The runner prints that file's header before it executes anything, and refuses to
+act without `--apply`. Read the header. It is the only warning you get, and the
+database it runs against is whichever one `.env.local` points at.
+
+Publishing does not make the wording reviewed, and the product still says so:
+`state_availability.clause_set_reviewed_at` stays NULL, Florida keeps computing to
+`cover_only`, and every rendered document carries both a SPECIMEN banner and a
+cover-only banner. Do not remove those to tidy up a demo.
 
 ### 4. Run
 
@@ -120,3 +134,25 @@ npm run dev        # next dev
 npm run build      # production build
 npm run typecheck  # tsc --noEmit — strict mode, and it stays on
 ```
+
+### Operational scripts
+
+Every one reads credentials from `.env.local` — never the ambient environment —
+and every one is a dry run until you pass `--apply`.
+
+```bash
+node scripts/db-push.mjs      --apply   # pending migrations
+node scripts/db-run.mjs <file> --apply  # one SQL file (the seeds live here)
+node scripts/setup-deploy.mjs --apply   # Vercel project, env vars, domains, Cloudflare DNS
+node scripts/setup-email.mjs  --apply   # register the domain with Resend, write its DNS
+```
+
+They share a preflight that refuses to run against the wrong account: the Vercel
+token must resolve to exactly one team and not LeadLynk's, the Cloudflare token
+must reach `i-waiver.com` and nothing else, and the Supabase token must see
+exactly one project. This machine carries LeadLynk credentials in its ambient
+environment, so that is a guard rather than a courtesy.
+
+`setup-deploy.mjs` is a description of the correct state, not a one-time action —
+re-running it corrects drift, including a DNS record that has been switched to
+proxied. Vercel needs those records DNS-only.
