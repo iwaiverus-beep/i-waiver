@@ -8,11 +8,14 @@
  * ---------------------------------------------------------------------------
  * THE ISOLATION RULE
  *
- * This machine has a LeadLynk `CLOUDFLARE_API_TOKEN` in the ambient environment.
- * iWaiver must never touch that account, so nothing here reads the conventional
- * variable names. Credentials come from iWaiver/.env.local under iWaiver-specific
- * names, and the preflight refuses to continue if the credentials resolve to
- * LeadLynk's Vercel team or to any Cloudflare zone other than i-waiver.com.
+ * This machine has a LeadLynk `CLOUDFLARE_API_TOKEN` in the ambient environment,
+ * and — for now — the i-waiver.com zone lives in that same LeadLynk account (see
+ * "Deployment accounts" in CLAUDE.md). So the rule is not about which account a
+ * token is issued from; it is about how far that token can reach. Nothing here
+ * reads the conventional variable names. Credentials come from iWaiver/.env.local
+ * under iWaiver-specific names, and the preflight refuses to continue if they
+ * resolve to LeadLynk's Vercel team or to any Cloudflare zone other than
+ * i-waiver.com.
  *
  * That is a guard, not a convention. If someone pastes the wrong token in, this
  * script stops rather than reconfiguring the wrong company's DNS.
@@ -72,7 +75,7 @@ function readEnvFile() {
   if (!existsSync(path)) {
     die(
       "No .env.local found.",
-      "Copy .env.local.example to .env.local and add the two deployment tokens.\n" +
+      "Create iWaiver/.env.local and add the two deployment tokens.\n" +
         "See the header of this script for which names to use.",
     );
   }
@@ -135,8 +138,9 @@ async function preflight(env) {
   if (cfToken === process.env.CLOUDFLARE_API_TOKEN) {
     die(
       "IWAIVER_CLOUDFLARE_API_TOKEN is the same value as the ambient CLOUDFLARE_API_TOKEN.",
-      "That ambient token belongs to LeadLynk. Create a separate token in the\n" +
-        "i-waiver Cloudflare account, scoped to Zone:DNS:Edit on i-waiver.com only.",
+      "That ambient token is account-wide: it can edit every LeadLynk zone.\n" +
+        "Create a separate token scoped to Zone:DNS:Edit on the i-waiver.com zone\n" +
+        "only, and put that one in IWAIVER_CLOUDFLARE_API_TOKEN.",
     );
   }
 
@@ -189,7 +193,8 @@ async function preflight(env) {
   if (!zone) {
     die(
       `This Cloudflare token cannot see the zone ${DOMAIN}.`,
-      "Create the token in the i-waiver Cloudflare account:\n" +
+      `Create the token from whichever Cloudflare account holds the ${DOMAIN} zone\n` +
+        "(currently LeadLynk — see \"Deployment accounts\" in CLAUDE.md):\n" +
         "  Cloudflare → My Profile → API Tokens → Create Token\n" +
         `  Permissions: Zone → DNS → Edit,  Zone Resources: Include → Specific zone → ${DOMAIN}`,
     );
@@ -202,8 +207,8 @@ async function preflight(env) {
   if (strays.length > 0) {
     die(
       `This Cloudflare token can also edit: ${strays.join(", ")}.`,
-      `Scope it to ${DOMAIN} only. A token that can reach another company's zone is\n` +
-        "exactly the accident this script exists to prevent.",
+      `Scope it to ${DOMAIN} only. A token that can reach a second zone is exactly\n` +
+        "the accident this script exists to prevent.",
     );
   }
 

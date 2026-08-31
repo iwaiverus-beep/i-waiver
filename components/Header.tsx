@@ -5,6 +5,7 @@ import { useState } from "react";
 import { BRAND } from "@/lib/brand";
 import { Container } from "./ui";
 import { AccountLink } from "./AccountLink";
+import { PreviewChip, usePreview } from "./PreviewGate";
 
 const NAV = [
   { href: "/how-it-works", label: "How it works" },
@@ -15,12 +16,23 @@ const NAV = [
 
 export function Header() {
   const [open, setOpen] = useState(false);
+  const { unlocked, noteLogoClick } = usePreview();
 
   return (
     <header className="sticky top-0 z-50 border-b border-line/70 bg-paper/85 backdrop-blur">
       <Container>
         <div className="flex h-16 items-center justify-between">
-          <Link href="/" className="flex items-center gap-2.5">
+          {/*
+            Still a real link home — the counting rides along with it. Clicking
+            five times navigates to "/" each time, which is harmless: this header
+            lives in the root layout, so it is not remounted by that navigation
+            and the run of clicks survives.
+          */}
+          <Link
+            href="/"
+            onClick={noteLogoClick}
+            className="flex items-center gap-2.5"
+          >
             <Mark />
             <span className="font-serif text-lg tracking-tight">
               {BRAND.name}
@@ -37,7 +49,8 @@ export function Header() {
                 {item.label}
               </Link>
             ))}
-            <AccountLink />
+            {unlocked && <AccountLink />}
+            <PreviewChip />
             <Link
               href="/#waitlist"
               className="rounded-full bg-accent px-5 py-2 text-sm font-semibold text-paper transition-colors hover:bg-accent-hover"
@@ -77,7 +90,7 @@ export function Header() {
                   {item.label}
                 </Link>
               ))}
-              <AccountLink onNavigate={() => setOpen(false)} />
+              {unlocked && <AccountLink onNavigate={() => setOpen(false)} />}
               <Link
                 href="/#waitlist"
                 onClick={() => setOpen(false)}

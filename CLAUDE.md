@@ -18,6 +18,28 @@ Next.js (App Router) · Supabase (Postgres + auth + storage) · Vercel · Cloudf
 DNS (DNS-only records, not proxied) · Stripe · Resend for email. SMS is a later
 addition; keep `delivery_channel` an enum so adding it is config, not migration.
 
+## Deployment accounts
+
+Vercel (team `iWaver`) and Supabase are iWaiver's own accounts. Cloudflare is
+not: `i-waiver.com` was registered at Cloudflare Registrar on 2026-08-28 and its
+zone lives in the **LeadLynk** Cloudflare account
+(`d51e84d55aa708d515ca77d0d71d1c58`, nameservers drake/faye). That is not the
+intended end state — an ICANN 60-day lock blocks transferring a new registration
+until roughly 2026-10-27 — but it is the arrangement, and it works.
+
+Do not "separate" it by adding a second zone for the domain in another
+Cloudflare account. That was tried on 2026-08-28: the duplicate sat `pending`
+forever on nameservers the registrar never pointed at, and would have silently
+accepted every record written to it while the real zone stayed empty. A
+registrar-locked domain cannot be moved by re-creating its zone elsewhere.
+
+What does stay separate is the credential.
+`IWAIVER_CLOUDFLARE_API_TOKEN` must be scoped to Zone → DNS → Edit on the single
+`i-waiver.com` zone, so it cannot read or write anything else in that account.
+Never use the machine's ambient account-wide `CLOUDFLARE_API_TOKEN`:
+`scripts/setup-deploy.mjs` rejects that exact value, and rejects any token that
+can reach a second zone.
+
 ## Read first
 
 - `docs/data-model.md` — the reasoning behind the schema. Read before proposing

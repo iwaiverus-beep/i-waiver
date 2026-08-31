@@ -10,7 +10,7 @@ Working name — see `CLAUDE.md` for what is decided and what is not.
 ### 1. Environment
 
 ```bash
-cp .env.local.example .env.local
+# Create .env.local (see "Environment" below for the variables it needs)
 ```
 
 Fill in, at minimum:

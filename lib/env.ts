@@ -6,7 +6,7 @@
  * that needed it with a message naming the variable — not fail the build with a
  * stack trace pointing at an import.
  *
- * The one rule from .env.local.example holds here too: NEXT_PUBLIC_ is shipped to
+ * The one rule from .env.local holds here too: NEXT_PUBLIC_ is shipped to
  * the browser. Nothing in this file that lacks that prefix may ever be read from a
  * client component.
  */
@@ -16,7 +16,7 @@ import { createHash } from "node:crypto";
 export class MissingEnvError extends Error {
   constructor(name: string) {
     super(
-      `Missing environment variable ${name}. Copy .env.local.example to .env.local and fill it in.`,
+      `Missing environment variable ${name}. Add it to .env.local.`,
     );
     this.name = "MissingEnvError";
   }
