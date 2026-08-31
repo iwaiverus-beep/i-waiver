@@ -29,3 +29,6 @@ Thumbs.db
 
 # tsc --incremental cache
 tsconfig.tsbuildinfo
+
+.vercel
+.env*
