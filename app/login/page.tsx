@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { AuthForm } from "@/components/AuthForm";
+import { OAuthButtons } from "@/components/OAuthButtons";
 import { Container } from "@/components/ui";
 import { configurationProblems } from "@/lib/env";
 
@@ -8,9 +9,9 @@ export const metadata: Metadata = { title: "Sign in" };
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string }>;
+  searchParams: Promise<{ next?: string; error?: string }>;
 }) {
-  const { next } = await searchParams;
+  const { next, error } = await searchParams;
   const problems = configurationProblems();
 
   // Only relative paths, so a crafted ?next= cannot bounce someone off-site
@@ -33,13 +34,18 @@ export default async function LoginPage({
               This deployment is not configured yet.
             </p>
             <p className="mt-2 text-sm leading-relaxed text-flag">
-              Missing: {problems.join(", ")}. Copy{" "}
-              <code className="font-mono text-xs">.env.local.example</code> to{" "}
-              <code className="font-mono text-xs">.env.local</code> and fill it in.
+              Missing: {problems.join(", ")}. Add them to{" "}
+              <code className="font-mono text-xs">.env.local</code>.
             </p>
           </div>
         ) : (
-          <div className="mt-8">
+          <div className="mt-8 space-y-6">
+            {error && (
+              <p className="rounded-xl border border-flag/30 bg-flag/[0.06] px-5 py-4 text-sm text-flag">
+                {error}
+              </p>
+            )}
+            <OAuthButtons next={destination} />
             <AuthForm next={destination} />
           </div>
         )}
