@@ -13,6 +13,8 @@
 
 import { createHash } from "node:crypto";
 
+import { BRAND } from "@/lib/brand";
+
 export class MissingEnvError extends Error {
   constructor(name: string) {
     super(
@@ -64,8 +66,20 @@ export function coverageInternalKey(): string {
 }
 
 export const resendApiKey = () => optional("RESEND_API_KEY");
+/**
+ * The From line a borrower sees.
+ *
+ * The display name comes from BRAND rather than being spelled out here, because
+ * this string and the site header are the same claim about who is writing. When
+ * they drift, the email looks like it came from someone adjacent to the company
+ * rather than the company — which is exactly the smell people are taught to
+ * watch for in a phishing message.
+ *
+ * The fallback address is Resend's shared test domain, usable before
+ * i-waiver.com is verified and wrong for anything real.
+ */
 export const emailFrom = () =>
-  optional("EMAIL_FROM") ?? "iWaiver <onboarding@resend.dev>";
+  optional("EMAIL_FROM") ?? `${BRAND.name} <onboarding@resend.dev>`;
 
 /**
  * Absolute origin for links that leave the building. A signing link with a
