@@ -3,6 +3,8 @@ import Link from "next/link";
 import { Container } from "@/components/ui";
 import { Note } from "@/components/app-ui";
 import { NewAgreementForm, type OpenState } from "@/components/NewAgreementForm";
+import type { Asset } from "@/components/AssetsManager";
+import type { Contact } from "@/components/ContactsManager";
 import { userClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = { title: "Lend something" };
@@ -22,6 +24,24 @@ export default async function NewAgreementPage() {
 
   const states = (data ?? []) as OpenState[];
 
+  // The saved lists. Read under RLS, so each is already scoped to the caller.
+  const [{ data: assetRows }, { data: contactRows }] = await Promise.all([
+    supabase
+      .from("assets")
+      .select("id, asset_class, description, identifier, declared_value_cents, year, make, model")
+      .is("archived_at", null)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("contacts")
+      .select("id, display_name, email, phone, notes, source, last_used_at")
+      .is("archived_at", null)
+      .order("last_used_at", { ascending: false, nullsFirst: false })
+      .order("display_name"),
+  ]);
+
+  const assets = (assetRows ?? []) as Asset[];
+  const contacts = (contactRows ?? []) as Contact[];
+
   return (
     <Container className="py-14 sm:py-20">
       <div className="mx-auto max-w-2xl">
@@ -40,7 +60,7 @@ export default async function NewAgreementPage() {
           </div>
         ) : (
           <div className="mt-10">
-            <NewAgreementForm states={states} />
+            <NewAgreementForm states={states} assets={assets} contacts={contacts} />
           </div>
         )}
       </div>

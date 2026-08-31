@@ -3,6 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toLocalInputValue } from "@/lib/format";
+import { DeviceContactPicker } from "./DeviceContactPicker";
+import type { Asset } from "./AssetsManager";
+import type { Contact } from "./ContactsManager";
 
 export type OpenState = {
   state: string;
@@ -19,7 +22,15 @@ const ASSET_CLASSES = [
   { value: "other", label: "Something else" },
 ];
 
-export function NewAgreementForm({ states }: { states: OpenState[] }) {
+export function NewAgreementForm({
+  states,
+  assets = [],
+  contacts = [],
+}: {
+  states: OpenState[];
+  assets?: Asset[];
+  contacts?: Contact[];
+}) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -29,6 +40,25 @@ export function NewAgreementForm({ states }: { states: OpenState[] }) {
   const defaultEnd = new Date(now.getTime() + 9 * 60 * 60 * 1000);
 
   const [state, setState] = useState(states[0]?.state ?? "FL");
+
+  // "" means "something new" — the saved lists are a shortcut, never a
+  // requirement, so a first-time lender sees exactly the form they saw before.
+  const [assetId, setAssetId] = useState("");
+  const [contactId, setContactId] = useState("");
+  const [borrowerName, setBorrowerName] = useState("");
+  const [borrowerEmail, setBorrowerEmail] = useState("");
+  const [saveContact, setSaveContact] = useState(true);
+
+  function chooseContact(id: string) {
+    setContactId(id);
+    const found = contacts.find((c) => c.id === id);
+    if (found) {
+      setBorrowerName(found.display_name);
+      setBorrowerEmail(found.email ?? "");
+      // Already saved, so there is nothing to offer to save.
+      setSaveContact(false);
+    }
+  }
   const chosen = states.find((s) => s.state === state);
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
@@ -38,12 +68,13 @@ export function NewAgreementForm({ states }: { states: OpenState[] }) {
 
     const form = new FormData(event.currentTarget);
     const payload = {
-      borrower_name: form.get("borrower_name"),
-      borrower_email: form.get("borrower_email"),
+      borrower_name: borrowerName,
+      borrower_email: borrowerEmail,
       starts_at: new Date(String(form.get("starts_at"))).toISOString(),
       ends_at: new Date(String(form.get("ends_at"))).toISOString(),
       jurisdiction: form.get("jurisdiction"),
       activity_class: form.get("activity_class"),
+      asset_id: assetId || undefined,
       asset: {
         asset_class: form.get("asset_class"),
         description: form.get("description"),
@@ -69,6 +100,21 @@ export function NewAgreementForm({ states }: { states: OpenState[] }) {
       return;
     }
 
+    if (saveContact && !contactId && borrowerEmail.trim()) {
+      // Deliberately not awaited into the failure path: the agreement exists and
+      // the user is on their way to it. A contact that did not save is a minor
+      // annoyance, not a reason to hold up the screen or show an error.
+      void fetch("/api/contacts", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          display_name: borrowerName,
+          email: borrowerEmail,
+          source: "agreement",
+        }),
+      }).catch(() => {});
+    }
+
     router.push(`/agreements/${body.id}`);
     router.refresh();
   }
@@ -81,10 +127,29 @@ export function NewAgreementForm({ states }: { states: OpenState[] }) {
           hint="The declared value is what the damage clause and the cover are both based on, so it is worth getting right."
         />
 
+        {assets.length > 0 && (
+          <Field label="Something you have saved" wide>
+            <select
+              value={assetId}
+              onChange={(e) => setAssetId(e.target.value)}
+              className={input}
+            >
+              <option value="">Something new…</option>
+              {assets.map((asset) => (
+                <option key={asset.id} value={asset.id}>
+                  {[asset.year, asset.make, asset.model].filter(Boolean).join(" ") ||
+                    asset.description}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
+
         <Field label="Description" wide>
           <input
             name="description"
-            required
+            required={!assetId}
+            disabled={Boolean(assetId)}
             placeholder="Yamaha WaveRunner, blue, with trailer"
             className={input}
           />
@@ -135,14 +200,48 @@ export function NewAgreementForm({ states }: { states: OpenState[] }) {
           hint="They will get an email with a link. They do not need an account and will never be asked to make one."
         />
 
+        {contacts.length > 0 && (
+          <Field label="Someone you have lent to before" wide>
+            <select
+              value={contactId}
+              onChange={(e) => chooseContact(e.target.value)}
+              className={input}
+            >
+              <option value="">Someone new…</option>
+              {contacts.map((contact) => (
+                <option key={contact.id} value={contact.id}>
+                  {contact.display_name}
+                  {contact.email ? ` — ${contact.email}` : ""}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
+
+        <DeviceContactPicker
+          onPick={(picked) => {
+            setBorrowerName(picked.name);
+            if (picked.email) setBorrowerEmail(picked.email);
+            setContactId("");
+            setSaveContact(true);
+          }}
+        />
+
         <div className="grid gap-5 sm:grid-cols-2">
           <Field label="Their name">
-            <input name="borrower_name" required placeholder="Marcus Reid" className={input} />
+            <input
+              value={borrowerName}
+              onChange={(e) => setBorrowerName(e.target.value)}
+              required
+              placeholder="Marcus Reid"
+              className={input}
+            />
           </Field>
 
           <Field label="Their email">
             <input
-              name="borrower_email"
+              value={borrowerEmail}
+              onChange={(e) => setBorrowerEmail(e.target.value)}
               type="email"
               required
               placeholder="marcus@example.com"

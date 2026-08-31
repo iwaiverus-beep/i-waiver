@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Container } from "@/components/ui";
+import { AppNav } from "@/components/AppNav";
 import { Empty, Note, StatusBadge } from "@/components/app-ui";
 import { userClient } from "@/lib/supabase/server";
 import { formatDate } from "@/lib/format";
@@ -37,6 +38,7 @@ export default async function DashboardPage() {
 
   return (
     <Container className="py-14 sm:py-20">
+      <AppNav />
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="font-serif text-3xl tracking-tight">Your agreements</h1>
