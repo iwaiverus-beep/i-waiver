@@ -53,7 +53,14 @@ function cleanEmail(raw: string | null): string | null {
   return value.toLowerCase();
 }
 
-function cleanPhone(raw: string | null): string | null {
+/**
+ * E.164, or a sentence explaining why not.
+ *
+ * Exported because the account screen puts a phone number on `profiles` and
+ * there is no version of "two normalisers for one column shape" that stays in
+ * step with itself.
+ */
+export function cleanPhone(raw: string | null): string | null {
   if (!raw) return null;
   const value = raw.trim();
   if (!value) return null;

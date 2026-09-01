@@ -9,6 +9,7 @@ import {
 } from "pdf-lib";
 import type { AssembledDocument } from "@/lib/render/agreement";
 import { formatCents, shortHash } from "@/lib/format";
+import { PROVIDER_LABELS } from "@/lib/payouts";
 
 /**
  * The rendered artifact.
@@ -253,13 +254,6 @@ const CHARGE_LABELS: Record<string, string> = {
   launch_fee: "Launch / ramp fee",
   delivery: "Delivery",
   usage_fee: "Rental fee",
-};
-
-const PROVIDER_LABELS: Record<string, string> = {
-  venmo: "Venmo",
-  cashapp: "Cash App",
-  zelle: "Zelle",
-  paypal: "PayPal",
 };
 
 export async function renderAgreementPdf(input: {

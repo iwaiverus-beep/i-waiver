@@ -1,8 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Source_Serif_4 } from "next/font/google";
 import "./globals.css";
-import { Header } from "@/components/Header";
-import { Footer } from "@/components/Footer";
 import { PreviewProvider } from "@/components/PreviewGate";
 import { ServiceWorker } from "@/components/ServiceWorker";
 import { InstallPrompt } from "@/components/InstallPrompt";
@@ -80,10 +78,15 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${sans.variable} ${serif.variable}`}>
       <body className="flex min-h-screen flex-col font-sans">
+        {/*
+          No header, no footer, no <main>. Which chrome wraps a page is decided
+          one level down, by the route group it sits in: app/(marketing) puts the
+          public masthead and the four-column footer around it, app/(app) puts the
+          signed-in shell around it. Everything that has to be true of every page
+          regardless — fonts, the preview gate, the service worker — stays here.
+        */}
         <PreviewProvider>
-          <Header />
-          <main className="flex-1">{children}</main>
-          <Footer />
+          {children}
           <InstallPrompt />
           <ServiceWorker />
         </PreviewProvider>

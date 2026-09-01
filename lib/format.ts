@@ -251,3 +251,20 @@ export function shortHash(hash: string | null | undefined): string {
   if (!hash) return "—";
   return `${hash.slice(0, 8)}…${hash.slice(-8)}`;
 }
+
+/**
+ * The initials the header shows until somebody uploads a picture.
+ *
+ * First and last, because a middle initial in a 32px circle is three characters
+ * of nothing. Falls back to the email's first letter, and then to a shape, so
+ * this never returns an empty string into a round badge.
+ */
+export function initialsFor(fullName: string | null, email: string | null): string {
+  const parts = (fullName ?? "").trim().split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+  }
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  if (email) return email[0].toUpperCase();
+  return "·";
+}

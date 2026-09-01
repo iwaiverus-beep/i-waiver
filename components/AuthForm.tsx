@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { browserClient } from "@/lib/supabase/browser";
 import { PasswordField } from "./PasswordField";
+import { Field, inputClass } from "./form-ui";
 
 /**
  * Sign in and sign up for lenders.
@@ -140,19 +141,5 @@ export function AuthForm({ next }: { next: string }) {
         </button>
       </p>
     </form>
-  );
-}
-
-const inputClass =
-  "w-full rounded-lg border border-line bg-paper px-4 py-2.5 text-sm text-ink outline-none transition-colors focus:border-accent";
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="block">
-      <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink-muted">
-        {label}
-      </span>
-      {children}
-    </label>
   );
 }
