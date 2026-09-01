@@ -87,7 +87,7 @@ export function SigningLinks({
       {!lenderSigned && (
         <div>
           <p className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
-            You
+            You (the lender)
           </p>
           <div className="mt-3 flex flex-wrap gap-3">
             <button
@@ -139,10 +139,18 @@ export function SigningLinks({
       {notice && <p className="text-sm text-ink-soft">{notice}</p>}
       {error && <p className="text-sm text-flag">{error}</p>}
 
+      {/* Both parties' links land in this one panel, which is the whole reason
+          every line in it names WHOSE DEVICE it belongs on. A link and a QR code
+          look identical whoever they are for, and "Your link" above a large QR
+          code reads, reasonably, as the one you hold out to the other person.
+          Getting that wrong is not cosmetic: the lender's link signs as the
+          lender. */}
       {link && (
         <div className="rounded-xl border border-line bg-surface px-5 py-4">
           <p className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
-            {link.role === "lender" ? "Your link" : `${borrowerName}'s link`}
+            {link.role === "lender"
+              ? "Your link — for your device"
+              : `${borrowerName}'s link — for their device`}
           </p>
           <a
             href={link.url}
@@ -154,6 +162,12 @@ export function SigningLinks({
             Good for 48 hours, usable once. It is not stored anywhere you can read it
             again — if you lose it, ask for another.
           </p>
+          {link.role === "lender" && (
+            <p className="mt-2 text-xs font-medium text-flag">
+              This one signs as you. Do not hand it to {borrowerName} — send them
+              their own link instead.
+            </p>
+          )}
 
           {/* The same capability, in the form that works when both people are
               standing next to the thing being lent. */}

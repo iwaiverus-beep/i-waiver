@@ -5,6 +5,7 @@ import { Container } from "@/components/ui";
 import { Empty, Mono, Note, Panel, Row, StatusBadge } from "@/components/app-ui";
 import { AgreementActions } from "@/components/AgreementActions";
 import { BookingPanel } from "@/components/BookingPanel";
+import { SignerContact } from "@/components/SignerContact";
 import { SigningLinks } from "@/components/SigningLinks";
 import { VerifyChain } from "@/components/VerifyChain";
 import {
@@ -41,7 +42,7 @@ export default async function AgreementPage({
     await Promise.all([
       db
         .from("signers")
-        .select("id, role, display_name, email, capacity, signed_at, declined_at")
+        .select("id, role, display_name, email, phone, capacity, signed_at, declined_at")
         .eq("agreement_id", id)
         .order("order_index"),
       db
@@ -80,6 +81,27 @@ export default async function AgreementPage({
     (s) => s.role === "borrower" || s.role === "participant",
   );
   const participantRelease = borrower?.role === "participant";
+
+  // What became of the last email to the other party.
+  //
+  // Newest link only. Older ones are the record of previous attempts and belong
+  // in the audit trail, not on a panel whose job is "is this getting through
+  // right now". `signing_links` is revoked from both client roles, so this is read
+  // here on the service client and passed down as a status, never as a token.
+  const { data: lastLink } = borrower
+    ? await db
+        .from("signing_links")
+        .select("delivery_status, delivery_detail, delivery_status_at, created_at")
+        .eq("signer_id", borrower.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle()
+    : { data: null };
+
+  // The edit is only safe while nothing is bound to the current document hash —
+  // see lib/agreements/contact.ts. The server enforces it; this decides whether
+  // to offer the control at all.
+  const nobodyHasSigned = (signers ?? []).every((s) => !s.signed_at);
 
   // False when the render failed, which is right: with no assembled document
   // there is no schedule to show, and the refusal above is the useful thing.
@@ -323,12 +345,37 @@ export default async function AgreementPage({
         <div className="space-y-6">
           {["sent", "partially_signed"].includes(agreement.status) && borrower && (
             <Panel title="Signing links" description="Tokenised, single use, 48 hours.">
-              <SigningLinks
-                agreementId={id}
-                lenderSigned={Boolean(lender?.signed_at)}
-                borrowerSigned={Boolean(borrower.signed_at)}
-                borrowerName={borrower.display_name}
-              />
+              <div className="space-y-6">
+                <SigningLinks
+                  agreementId={id}
+                  lenderSigned={Boolean(lender?.signed_at)}
+                  borrowerSigned={Boolean(borrower.signed_at)}
+                  borrowerName={borrower.display_name}
+                />
+
+                {/* Below the buttons, not above them. The ordinary visit is
+                    "send this to them"; the address is only interesting once
+                    that has failed, and the panel says so loudly when it has. */}
+                {!borrower.signed_at && (
+                  <SignerContact
+                    agreementId={id}
+                    signerId={borrower.id}
+                    name={borrower.display_name}
+                    email={borrower.email}
+                    phone={borrower.phone}
+                    canEdit={nobodyHasSigned}
+                    delivery={
+                      lastLink
+                        ? {
+                            status: lastLink.delivery_status,
+                            detail: lastLink.delivery_detail,
+                            at: lastLink.delivery_status_at,
+                          }
+                        : null
+                    }
+                  />
+                )}
+              </div>
             </Panel>
           )}
 

@@ -106,6 +106,17 @@ export const supportEmail = () =>
   optional("SUPPORT_EMAIL") ?? `support@${BRAND.domain}`;
 
 export const resendApiKey = () => optional("RESEND_API_KEY");
+
+/**
+ * Verifies Resend's delivery webhooks.
+ *
+ * Optional, and the endpoint refuses every request while it is unset rather than
+ * accepting unsigned ones. A bounce webhook writes to the evidence-adjacent
+ * `signing_links` row, so an open endpoint would let anyone on the internet mark
+ * a borrower's link as bounced and send a lender chasing an address that was
+ * fine. Off is a safe state; trusting is not.
+ */
+export const resendWebhookSecret = () => optional("RESEND_WEBHOOK_SECRET");
 /**
  * The From line a borrower sees.
  *

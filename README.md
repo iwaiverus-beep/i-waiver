@@ -30,6 +30,21 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 written to the server log and recorded as transport `console`, never as delivered.
 The borrower's signing link is shown in the terminal and on the agreement page.
 
+`RESEND_WEBHOOK_SECRET` is how the app finds out what became of a message it sent.
+`delivered_at` on a signing link has only ever meant the provider accepted it — a
+full mailbox or a mistyped domain bounces after that, and without the webhook it
+bounces silently. Add an endpoint in Resend → Webhooks pointing at
+
+```
+https://<your host>/api/webhooks/resend
+```
+
+subscribed to `email.sent`, `email.delivered`, `email.delivery_delayed`,
+`email.bounced` and `email.complained`, then paste its `whsec_…` signing secret in.
+Until it is set the endpoint refuses every request rather than trusting unsigned
+ones — a caller who could forge a bounce could send a lender chasing an address
+that was fine.
+
 Optional, for the partner and admin consoles:
 
 | Variable | What it does |

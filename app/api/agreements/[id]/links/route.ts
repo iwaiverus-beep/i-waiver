@@ -88,6 +88,10 @@ export async function POST(
         .update({
           delivery_ref: `${result.transport}:${result.id}`,
           delivered_at: delivered ? new Date().toISOString() : null,
+          // Accepted by the provider, nothing more. The webhook moves it from
+          // here — see app/api/webhooks/resend/route.ts.
+          delivery_status: delivered ? "sent" : "pending",
+          delivery_status_at: delivered ? new Date().toISOString() : null,
         })
         .eq("id", linkId);
 

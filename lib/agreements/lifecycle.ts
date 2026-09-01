@@ -319,11 +319,20 @@ export async function sendAgreement(
 
         // `delivered_at` is only set for a real send. The console transport is
         // recorded as what it is.
+        //
+        // `delivery_status` starts at `sent` — the provider took it — and moves
+        // only when the webhook says what happened next. Set here rather than
+        // waiting for the provider's own `email.sent` event, so a deployment with
+        // no webhook configured still shows the truth it knows instead of sitting
+        // at `pending` forever.
         await db
           .from("signing_links")
           .update({
             delivery_ref: `${result.transport}:${result.id}`,
             delivered_at: result.transport === "resend" ? new Date().toISOString() : null,
+            delivery_status: result.transport === "resend" ? "sent" : "pending",
+            delivery_status_at:
+              result.transport === "resend" ? new Date().toISOString() : null,
           })
           .eq("id", linkId);
 

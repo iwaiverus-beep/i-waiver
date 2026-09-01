@@ -15,6 +15,14 @@ export type AuditEventType =
   | "quoted"
   | "bound"
   | "paid"
+  // `paid` means a processor told us. `settlement_asserted` is the lender's word
+  // that money changed hands somewhere we cannot see — see 20260901000031.
+  | "charge_stated"
+  | "settlement_asserted"
+  // `delivered` only ever meant the provider accepted it. This is what happened
+  // next — see 20260901000034.
+  | "bounced"
+  | "contact_updated"
   | "voided";
 
 export type AuditActor =

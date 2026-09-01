@@ -262,6 +262,24 @@ the guardian product.
 
 Unique on `(agreement_id, role)` for lender/borrower.
 
+**Editing `email` or `phone` is a document change, not a metadata change.**
+`canonicalise` writes the parties as `borrower: Jane Smith <jane@example.com> [uuid]`,
+so correcting a bounced address re-renders the agreement and changes its hash. That is
+right — the record of who was party to this and how they were reached belongs in the
+instrument — but it means the edit is only safe while nothing is bound to the old bytes.
+
+So the rule in `lib/agreements/contact.ts` is **nobody has signed**, not "the status is
+sent", and not "this signer has not signed". If the lender has already signed, their
+`document_hash_at_signing` was computed over the old address; changing it leaves a
+signature that fails its own verification and nobody discovers that until it matters.
+Past that point the remedy is the one the schema was built for — void and re-execute,
+linked by `replaces_agreement_id`.
+
+The edit also consumes every outstanding link for that signer. The usual reason for
+correcting an address is that it was wrong, and a wrong address is one somebody else
+may be reading: a live single-use capability to sign as this person, sitting in a
+stranger's inbox.
+
 ### `signing_links`
 Tokenized, short-lived, single-use. This is the borrower's entire auth story.
 
@@ -273,11 +291,25 @@ Tokenized, short-lived, single-use. This is the borrower's entire auth story.
 | `expires_at` | hours, not days |
 | `consumed_at` | |
 | `delivery_channel` | `sms` \| `email` |
-| `delivered_at`, `delivery_ref` | Twilio/SendGrid message id — evidence of delivery |
+| `delivered_at`, `delivery_ref` | the moment the provider **accepted** it, and its message id |
+| `delivery_status` | `pending`, `sent`, `delivered`, `bounced`, `complained`, `delayed` — added 20260901000035 |
+| `delivery_status_at`, `delivery_detail` | when it last moved, and the provider's reason verbatim |
 | `first_opened_at` | |
 | `open_ip`, `open_user_agent` | |
 
 Reissuing a link creates a new row. Never mutate.
+
+**`delivered_at` does not mean it arrived.** It has only ever meant the provider took
+the message off our hands, and the whole failure mode this pair of columns closes is
+that everything after that point was invisible: a full mailbox, a typo, a dead domain
+all succeeded at send, and the lender found out because the borrower never signed.
+
+`delivery_status` is the other half, fed by `POST /api/webhooks/resend`, which joins on
+`delivery_ref` (stored as `<transport>:<message id>`). The endpoint refuses every
+request while `RESEND_WEBHOOK_SECRET` is unset rather than accepting unsigned ones —
+forging a bounce would send a lender chasing an address that was fine — and it treats
+`bounced` and `complained` as terminal so a late, out-of-order `email.sent` cannot
+erase them.
 
 ---
 
@@ -401,7 +433,7 @@ Append-only. No updates, no deletes. Enforce with a trigger and revoke UPDATE/DE
 | `id` | bigserial |
 | `agreement_id` | FK |
 | `signer_id` | nullable |
-| `event_type` | `created`, `sent`, `delivered`, `opened`, `consented`, `viewed_clause`, `identity_verified`, `compliance_checked`, `signed`, `quoted`, `bound`, `paid`, `charge_stated`, `settlement_asserted`, `voided` |
+| `event_type` | `created`, `sent`, `delivered`, `opened`, `consented`, `viewed_clause`, `identity_verified`, `compliance_checked`, `signed`, `quoted`, `bound`, `paid`, `charge_stated`, `settlement_asserted`, `bounced`, `contact_updated`, `voided` |
 | `occurred_at` | |
 | `actor` | `lender`, `borrower`, `system`, `carrier` |
 | `ip`, `user_agent`, `geo` | |
