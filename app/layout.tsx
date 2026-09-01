@@ -1,9 +1,11 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, Source_Serif_4 } from "next/font/google";
 import "./globals.css";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { PreviewProvider } from "@/components/PreviewGate";
+import { ServiceWorker } from "@/components/ServiceWorker";
+import { InstallPrompt } from "@/components/InstallPrompt";
 import { BRAND } from "@/lib/brand";
 
 const sans = Inter({
@@ -17,6 +19,18 @@ const serif = Source_Serif_4({
   variable: "--font-serif",
   display: "swap",
 });
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#FAF9F6" },
+    { media: "(prefers-color-scheme: dark)", color: "#0B1622" },
+  ],
+  width: "device-width",
+  initialScale: 1,
+  // Not locked: pinch-zoom is an accessibility affordance, and a signer squinting
+  // at a release clause is exactly who needs it.
+  viewportFit: "cover",
+};
 
 export const metadata: Metadata = {
   metadataBase: new URL(`https://${BRAND.domain}`),
@@ -33,6 +47,15 @@ export const metadata: Metadata = {
     url: `https://${BRAND.domain}`,
     siteName: BRAND.name,
     type: "website",
+  },
+  appleWebApp: {
+    capable: true,
+    title: BRAND.name,
+    statusBarStyle: "default",
+  },
+  icons: {
+    icon: [{ url: "/favicon-32.png", sizes: "32x32", type: "image/png" }],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }],
   },
   // Unlisted while this is a preview. `noindex` is the directive that actually
   // removes a page from results — robots.txt only asks a crawler not to fetch,
@@ -61,6 +84,8 @@ export default function RootLayout({
           <Header />
           <main className="flex-1">{children}</main>
           <Footer />
+          <InstallPrompt />
+          <ServiceWorker />
         </PreviewProvider>
       </body>
     </html>
