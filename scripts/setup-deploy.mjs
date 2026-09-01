@@ -229,6 +229,11 @@ const RUNTIME_VARS = [
   { key: "SUPABASE_SERVICE_ROLE_KEY", required: true, secret: true },
   { key: "SIGNING_LINK_TOKEN_PEPPER", required: true, secret: true },
   { key: "RESEND_API_KEY", required: false, secret: true },
+  // Not required, and the app is safe without it: the webhook endpoint refuses
+  // every request while it is unset rather than trusting unsigned ones. But a
+  // deployment rebuilt without it has a webhook that looks installed and is
+  // silently dead, so it belongs here rather than in somebody's memory.
+  { key: "RESEND_WEBHOOK_SECRET", required: false, secret: true },
   { key: "EMAIL_FROM", required: false, secret: false },
   { key: "COVERAGE_INTERNAL_KEY", required: false, secret: true },
 ];
