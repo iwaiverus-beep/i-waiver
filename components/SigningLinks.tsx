@@ -9,6 +9,12 @@ import { QrCode } from "./QrCode";
  * The link is shown once, right here, and is not recoverable afterwards — only its
  * hash was stored. Asking again mints a new one, which is a visible event rather
  * than a silent lookup.
+ *
+ * The lender is the exception, and deliberately so: they are already here, looking
+ * at this screen. Handing them a link to click is a detour that reads like the
+ * signing itself, so "Sign it now" mints the link and walks straight through it.
+ * Their link still exists and is still single-use — they simply do not have to
+ * copy it to themselves. Signing on a phone instead stays one button along.
  */
 export function SigningLinks({
   agreementId,
@@ -30,6 +36,9 @@ export function SigningLinks({
     role: "lender" | "borrower",
     deliver: boolean,
     busyKey: string = role,
+    // Walk through the link rather than print it. Only ever for the lender: a
+    // borrower's link belongs on the borrower's device, not this browser.
+    follow = false,
   ) {
     setBusy(busyKey);
     setError(null);
@@ -43,12 +52,21 @@ export function SigningLinks({
     });
 
     const body = await response.json().catch(() => ({}));
-    setBusy(null);
 
     if (!response.ok) {
+      setBusy(null);
       setError(body.error ?? "Could not create a link.");
       return;
     }
+
+    if (follow && body.url) {
+      // Busy stays on: this navigates away, and a button that goes idle first
+      // invites a second click and a second minted link.
+      window.location.assign(body.url);
+      return;
+    }
+
+    setBusy(null);
 
     if (deliver) {
       setNotice(
@@ -61,38 +79,62 @@ export function SigningLinks({
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap gap-3">
-        {!lenderSigned && (
-          <button
-            onClick={() => issue("lender", false)}
-            disabled={busy !== null}
-            className="rounded-full bg-accent px-5 py-2.5 text-sm font-semibold text-paper transition-colors hover:bg-accent-hover disabled:opacity-50"
-          >
-            {busy === "lender" ? "One moment…" : "Sign it yourself"}
-          </button>
-        )}
+    <div className="space-y-6">
+      {/* Grouped by person rather than by delivery method. The heading carries
+          who is signing, so each button only has to say where. That is what
+          stops "sign on this device" and a future "hand them this device" from
+          reading as the same action while sitting side by side. */}
+      {!lenderSigned && (
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
+            You
+          </p>
+          <div className="mt-3 flex flex-wrap gap-3">
+            <button
+              onClick={() => issue("lender", false, "lender", true)}
+              disabled={busy !== null}
+              className="rounded-full bg-accent px-5 py-2.5 text-sm font-semibold text-paper transition-colors hover:bg-accent-hover disabled:opacity-50"
+            >
+              {busy === "lender" ? "Opening…" : "Sign here now"}
+            </button>
 
-        {!borrowerSigned && (
-          <button
-            onClick={() => issue("borrower", false, "borrower-qr")}
-            disabled={busy !== null}
-            className="rounded-full bg-ink px-5 py-2.5 text-sm font-semibold text-paper transition-colors hover:bg-ink-soft disabled:opacity-50"
-          >
-            {busy === "borrower-qr" ? "One moment…" : "They are here — show a QR code"}
-          </button>
-        )}
+            <button
+              onClick={() => issue("lender", false, "lender-qr")}
+              disabled={busy !== null}
+              className="rounded-full border border-line px-5 py-2.5 text-sm font-semibold text-ink transition-colors hover:border-ink/40 disabled:opacity-50"
+            >
+              {busy === "lender-qr" ? "One moment…" : "Sign on my phone"}
+            </button>
+          </div>
+        </div>
+      )}
 
-        {!borrowerSigned && (
-          <button
-            onClick={() => issue("borrower", true)}
-            disabled={busy !== null}
-            className="rounded-full border border-line px-5 py-2.5 text-sm font-semibold text-ink transition-colors hover:border-ink/40 disabled:opacity-50"
-          >
-            {busy === "borrower" ? "Sending…" : `Send ${borrowerName} a fresh link`}
-          </button>
-        )}
-      </div>
+      {/* Their name, not "Borrower". The person is standing right there, and a
+          name is something staff can check against the face in front of them. */}
+      {!borrowerSigned && (
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
+            {borrowerName}
+          </p>
+          <div className="mt-3 flex flex-wrap gap-3">
+            <button
+              onClick={() => issue("borrower", false, "borrower-qr")}
+              disabled={busy !== null}
+              className="rounded-full bg-ink px-5 py-2.5 text-sm font-semibold text-paper transition-colors hover:bg-ink-soft disabled:opacity-50"
+            >
+              {busy === "borrower-qr" ? "One moment…" : "Show a QR code"}
+            </button>
+
+            <button
+              onClick={() => issue("borrower", true)}
+              disabled={busy !== null}
+              className="rounded-full border border-line px-5 py-2.5 text-sm font-semibold text-ink transition-colors hover:border-ink/40 disabled:opacity-50"
+            >
+              {busy === "borrower" ? "Sending…" : "Email a link"}
+            </button>
+          </div>
+        </div>
+      )}
 
       {notice && <p className="text-sm text-ink-soft">{notice}</p>}
       {error && <p className="text-sm text-flag">{error}</p>}
