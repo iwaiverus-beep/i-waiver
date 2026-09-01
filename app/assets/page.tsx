@@ -3,8 +3,13 @@ import { redirect } from "next/navigation";
 import { Container } from "@/components/ui";
 import { AppNav } from "@/components/AppNav";
 import { Empty } from "@/components/app-ui";
-import { AssetsManager, type Asset } from "@/components/AssetsManager";
+import {
+  AssetsManager,
+  type Asset,
+  type AssetOfferRow,
+} from "@/components/AssetsManager";
 import { userClient } from "@/lib/supabase/server";
+import { ASSET_COLUMNS_WITH_PHOTOS } from "@/lib/assets/fields";
 
 export const metadata: Metadata = { title: "Things you lend" };
 export const dynamic = "force-dynamic";
@@ -17,13 +22,36 @@ export default async function AssetsPage() {
 
   if (!user) redirect("/login?next=/assets");
 
-  const { data } = await supabase
-    .from("assets")
-    .select("id, asset_class, description, identifier, declared_value_cents, year, make, model")
-    .is("archived_at", null)
-    .order("created_at", { ascending: false });
+  // The lender's own offers ride along, so the "suggest with…" picker opens
+  // knowing what is already linked rather than fetching per item.
+  const [{ data }, { data: offerRows }] = await Promise.all([
+    supabase
+      .from("assets")
+      .select(ASSET_COLUMNS_WITH_PHOTOS)
+      .is("archived_at", null)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("asset_offers")
+      .select("parent_asset_id, offer_asset_id, order_index, default_selected")
+      .order("order_index"),
+  ]);
 
-  const assets = (data ?? []) as Asset[];
+  const assets = (data ?? []) as unknown as Asset[];
+  const offers = (offerRows ?? []) as AssetOfferRow[];
+
+  // Which of this lender's originators are businesses, because that decides which
+  // rate units each ITEM may use. An individual charging by the day is a bailment
+  // for hire their own policy will not cover, and the database refuses it — so the
+  // form should not present the choice in the first place.
+  //
+  // Per item, not per person: somebody can work at a rental shop and still lend
+  // their own jet ski to a neighbour, and those two items answer differently.
+  const { data: originators } = await supabase
+    .from("originators")
+    .select("id, kind")
+    .eq("kind", "organization");
+
+  const orgOriginatorIds = (originators ?? []).map((row) => row.id as string);
 
   return (
     <Container className="py-14 sm:py-20">
@@ -43,7 +71,11 @@ export default async function AssetsPage() {
         </div>
       )}
 
-      <AssetsManager initial={assets} />
+      <AssetsManager
+        initial={assets}
+        initialOffers={offers}
+        orgOriginatorIds={orgOriginatorIds}
+      />
     </Container>
   );
 }

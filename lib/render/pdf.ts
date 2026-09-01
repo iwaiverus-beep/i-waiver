@@ -239,6 +239,29 @@ function paragraphs(body: string): { text: string; bold: boolean }[] {
     });
 }
 
+/**
+ * What a charge is called on the page.
+ *
+ * `usage_fee` prints as "Rental fee" because that is what it is, and the document
+ * should say so in the word a reader would use. The enum name is the schema's
+ * business; the borrower's is what they are being asked to pay for.
+ */
+const CHARGE_LABELS: Record<string, string> = {
+  security_deposit: "Security deposit",
+  fuel: "Fuel",
+  cleaning: "Cleaning",
+  launch_fee: "Launch / ramp fee",
+  delivery: "Delivery",
+  usage_fee: "Rental fee",
+};
+
+const PROVIDER_LABELS: Record<string, string> = {
+  venmo: "Venmo",
+  cashapp: "Cash App",
+  zelle: "Zelle",
+  paypal: "PayPal",
+};
+
 export async function renderAgreementPdf(input: {
   document: AssembledDocument;
   signatures: SignatureEvidence[];
@@ -377,6 +400,79 @@ export async function renderAgreementPdf(input: {
 
     L.gap(2);
     L.keyValue("Total declared value", formatCents(doc.totalDeclaredValueCents));
+    L.gap(10);
+    L.rule();
+  }
+
+  // ---- Schedule B — charges ----------------------------------------------
+  //
+  // In the document, not only in a confirmation email. A schedule that lives in
+  // an email is a side note neither party signed, and unenforceable — which is
+  // the whole reason these figures are inside the hash as well as on the page.
+  //
+  // Before the clauses, like Schedule A, and for the same reason: the damage
+  // clause measures itself against the deposit, and a reader told to rely on a
+  // figure they have not reached yet is a reader who did not read it.
+  if (doc.charges.length > 0) {
+    L.need(96);
+    L.text("Schedule B — charges", { font: fonts.bold, size: 12 });
+    L.gap(6);
+
+    doc.charges.forEach((charge, index) => {
+      L.need(30);
+      L.text(
+        `${index + 1}. ${CHARGE_LABELS[charge.kind] ?? charge.kind} — ${formatCents(charge.amount_cents)}`,
+        { font: fonts.bold, size: 10.5 },
+      );
+      const detail = [
+        charge.detail,
+        charge.kind === "security_deposit"
+          ? "refundable, held against damage and return condition"
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" · ");
+      if (detail) L.text(detail, { size: 10, color: SOFT });
+      L.gap(4);
+    });
+
+    L.gap(2);
+    // Two figures, never one. A deposit is held, not owed, and a single "total"
+    // that quietly includes $500 coming back is the number people argue about
+    // afterwards — with reason.
+    L.keyValue("Total due", formatCents(doc.totalDueCents));
+    if (doc.securityDepositCents > 0) {
+      L.keyValue("Deposit (refundable)", formatCents(doc.securityDepositCents));
+    }
+
+    const direct = doc.charges.filter((c) => c.settlement === "direct");
+    const payout = direct.find((c) => c.payout)?.payout ?? null;
+    const lenderName = nameFor(doc, "lender");
+
+    if (direct.length === 0) {
+      L.keyValue("Payment", "By card, at signing.");
+    } else if (payout) {
+      const providerLabel = PROVIDER_LABELS[payout.provider];
+      L.keyValue(
+        "Payment",
+        providerLabel
+          ? `${lenderName} asked to be paid by ${providerLabel} at ${payout.handle}.`
+          : `${lenderName} asked to be paid at ${payout.handle}.`,
+      );
+    } else {
+      L.keyValue("Payment", `Settled directly with ${lenderName}.`);
+    }
+
+    // Said plainly, on the document, because the alternative is a borrower who
+    // believes a platform stands behind a transfer no platform ever saw.
+    if (direct.length > 0) {
+      L.gap(4);
+      L.callout(
+        "This money is paid directly between the two of you. i-Waiver does not collect it, hold it, or confirm that it was sent, and a personal transfer of this kind carries no dispute protection.",
+        FLAG,
+      );
+    }
+
     L.gap(10);
     L.rule();
   }

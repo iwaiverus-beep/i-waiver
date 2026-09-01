@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { serviceClient } from "@/lib/supabase/service";
 import { resolveIntakeLink } from "@/lib/intake/links";
 import { StartRequestForm } from "@/components/StartRequestForm";
+import { ItemListing } from "@/components/ItemListing";
 import { formatCents } from "@/lib/format";
 
 export const runtime = "nodejs";
@@ -31,8 +32,14 @@ export default async function StartPage({
 
   if (!resolved) notFound();
 
-  const { link, asset, lenderName } = resolved;
+  const { link, asset, offers, lenderName } = resolved;
   const lender = lenderName ?? "this lender";
+
+  // `is_offerable` is the lender's switch for whether this is merchandised. Off,
+  // the page is exactly what it was before any of this existed: who they are,
+  // what the thing is, and a form. On, it becomes a listing — photographs, their
+  // own description, what they ask for it — and the suggestions come with it.
+  const merchandised = Boolean(asset?.is_offerable);
 
   if (link.revoked_at) {
     return (
@@ -54,7 +61,9 @@ export default async function StartPage({
       </p>
       <h1 className="mt-1 text-2xl font-semibold text-ink">{lender}</h1>
 
-      {asset ? (
+      {asset && merchandised ? (
+        <ItemListing item={asset} />
+      ) : asset ? (
         <div className="mt-6 rounded-2xl border border-line bg-surface/50 p-5">
           <p className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
             What you are asking for
@@ -80,7 +89,11 @@ export default async function StartPage({
         </p>
       )}
 
-      <StartRequestForm slug={slug} lender={lender} />
+      <StartRequestForm
+        slug={slug}
+        lender={lender}
+        offers={merchandised ? offers : []}
+      />
 
       <p className="mt-8 text-xs leading-relaxed text-ink-muted">
         This does not commit you to anything. It puts a request in front of {lender};

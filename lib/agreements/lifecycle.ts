@@ -187,6 +187,63 @@ export async function sendAgreement(
     if (error) throw new TransitionRefused(`Could not snapshot the items: ${error.message}`);
   }
 
+  // 2b. Freeze the payment details onto every charge settled directly.
+  //
+  // The charge rows themselves are frozen by a trigger once the agreement leaves
+  // draft, but `lender_payout_handles` is a table the lender goes on editing. So
+  // the handle gets the same treatment the asset facts just got, and for the same
+  // reason: after this, Jane can change her Venmo and June's borrower still sees
+  // what June's borrower was told to do.
+  //
+  // It has to happen HERE — before the render on the next line — because the
+  // handle is inside the canonical text and therefore inside the hash. Freezing it
+  // afterwards would hash the live value and snapshot a different one.
+  const { data: directCharges, error: chargeReadError } = await db
+    .from("agreement_charges")
+    .select(
+      "id, lender_payout_handles(provider, handle, display_name)",
+    )
+    .eq("agreement_id", agreementId)
+    .eq("settlement", "direct")
+    .is("payout_snapshot", null);
+
+  if (chargeReadError) {
+    throw new TransitionRefused(
+      `Could not read the payment details: ${chargeReadError.message}`,
+    );
+  }
+
+  for (const charge of directCharges ?? []) {
+    const embedded = charge.lender_payout_handles as unknown as
+      | { provider: string; handle: string; display_name: string | null }
+      | { provider: string; handle: string; display_name: string | null }[]
+      | null;
+    const live = Array.isArray(embedded) ? (embedded[0] ?? null) : embedded;
+
+    // No handle is a legitimate answer — cash at the dock, or settle it between
+    // yourselves however you like. The document says so rather than inventing a
+    // payment method nobody offered.
+    if (!live) continue;
+
+    const { error: freezeError } = await db
+      .from("agreement_charges")
+      .update({
+        payout_snapshot: {
+          provider: live.provider,
+          handle: live.handle,
+          display_name: live.display_name ?? null,
+          frozen_at: new Date().toISOString(),
+        },
+      })
+      .eq("id", charge.id);
+
+    if (freezeError) {
+      throw new TransitionRefused(
+        `Could not snapshot the payment details: ${freezeError.message}`,
+      );
+    }
+  }
+
   // 3. Render. Raises if any clause in the set is unpublished.
   const document = await assembleAgreement(db, agreementId);
 

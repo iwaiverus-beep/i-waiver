@@ -28,6 +28,12 @@ type Body = {
   starts_at?: unknown;
   ends_at?: unknown;
   note?: unknown;
+  /**
+   * Which of the suggested add-ons they ticked. Ids of the lender's own items,
+   * and checked against what this code offered before anything is written — a
+   * borrower chooses among suggestions, they do not name an item.
+   */
+  add_on_ids?: unknown;
 };
 
 function firstAddress(header: string | null): string | null {
@@ -64,6 +70,11 @@ export async function POST(
       startsAt: text(body.starts_at, 40),
       endsAt: text(body.ends_at, 40),
       note: text(body.note, 500),
+      // Capped at the most a page can offer, so a hand-rolled body cannot make
+      // the ownership filter downstream do unbounded work.
+      addOnIds: Array.isArray(body.add_on_ids)
+        ? body.add_on_ids.filter((id): id is string => typeof id === "string").slice(0, 24)
+        : [],
       ip: firstAddress(request.headers.get("x-forwarded-for")),
       userAgent: text(request.headers.get("user-agent"), 300),
     });

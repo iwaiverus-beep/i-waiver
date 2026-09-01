@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { NotAuthorised } from "@/lib/agreements/access";
+import type { AssetPhoto, RateUnit } from "@/lib/assets/fields";
 
 /**
  * Static intake links — the printed QR code.
@@ -62,10 +63,7 @@ export function newSlug(length = 16): string {
 export async function resolveIntakeLink(
   db: SupabaseClient,
   slug: string,
-): Promise<
-  | { link: IntakeLink; asset: AssetFacts | null; lenderName: string | null }
-  | null
-> {
+): Promise<ResolvedIntakeLink | null> {
   const { data: link } = await db
     .from("intake_links")
     .select(
@@ -80,19 +78,44 @@ export async function resolveIntakeLink(
   // never supplies them: the declared value drives both the damage clause and the
   // premium, so a stranger typing it would be setting the terms of their own
   // liability and the price of the cover at once.
+  //
+  // The merchandising half rides along on the same read. It is the lender's own
+  // copy about their own item and carries no more authority than the rest of the
+  // row — in particular the price here is an ASKING price, not a term. What a
+  // borrower ends up owing is stated on the draft by a person.
   let asset: AssetFacts | null = null;
+  let offers: AssetFacts[] = [];
   if (link.asset_id) {
     const { data } = await db
       .from("assets")
-      .select("id, description, asset_class, declared_value_cents, year, make, model")
+      .select(ASSET_FACTS)
       .eq("id", link.asset_id)
       .is("archived_at", null)
       .maybeSingle();
-    asset = data ?? null;
+    asset = (data as AssetFacts | null) ?? null;
+    if (asset) offers = await offersFor(db, asset.id);
   }
 
-  return { link, asset, lenderName: await lenderNameFor(db, link.originator_id) };
+  return {
+    link,
+    asset,
+    offers,
+    lenderName: await lenderNameFor(db, link.originator_id),
+  };
 }
+
+export type ResolvedIntakeLink = {
+  link: IntakeLink;
+  asset: AssetFacts | null;
+  /** What this lender suggests alongside it. Empty on an originator-level code. */
+  offers: AssetFacts[];
+  lenderName: string | null;
+};
+
+const ASSET_FACTS =
+  "id, description, asset_class, declared_value_cents, year, make, model, " +
+  "headline, details_md, rate_cents, rate_unit, deposit_cents, quantity, is_offerable, " +
+  "asset_photos (id, storage_path, alt, order_index)";
 
 export type AssetFacts = {
   id: string;
@@ -102,7 +125,59 @@ export type AssetFacts = {
   year: number | null;
   make: string | null;
   model: string | null;
+  headline: string | null;
+  details_md: string | null;
+  rate_cents: number | null;
+  rate_unit: RateUnit | null;
+  deposit_cents: number | null;
+  quantity: number;
+  is_offerable: boolean;
+  asset_photos: AssetPhoto[] | null;
+  /** Set only on an add-on: whether its box starts ticked. */
+  default_selected?: boolean;
 };
+
+/**
+ * What this lender suggests alongside the thing being asked for.
+ *
+ * Two reads rather than one embedded select, because PostgREST cannot embed
+ * `assets` through `asset_offers` unambiguously — the join table has two foreign
+ * keys to the same table, which is the shape that breaks an embed. Explicit is
+ * also clearer about what is happening: a list of ids, then the items themselves.
+ *
+ * Archived items drop out here. A lender who takes the cooler off their list
+ * should stop being asked to supply it, and the offer row surviving is deliberate
+ * — putting it back restores the suggestion.
+ */
+async function offersFor(db: SupabaseClient, parentAssetId: string): Promise<AssetFacts[]> {
+  const { data: links } = await db
+    .from("asset_offers")
+    .select("offer_asset_id, order_index, default_selected")
+    .eq("parent_asset_id", parentAssetId)
+    .order("order_index");
+
+  if (!links || links.length === 0) return [];
+
+  const { data: items } = await db
+    .from("assets")
+    .select(ASSET_FACTS)
+    .in(
+      "id",
+      links.map((row) => row.offer_asset_id),
+    )
+    .is("archived_at", null);
+
+  const byId = new Map(
+    ((items ?? []) as unknown as AssetFacts[]).map((item) => [item.id, item]),
+  );
+
+  const resolved: AssetFacts[] = [];
+  for (const row of links) {
+    const item = byId.get(row.offer_asset_id);
+    if (item) resolved.push({ ...item, default_selected: row.default_selected });
+  }
+  return resolved;
+}
 
 /**
  * What to call the lender on the borrower's screen.

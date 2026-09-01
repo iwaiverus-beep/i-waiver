@@ -42,6 +42,31 @@ export type SignerFacts = {
   declined_at: string | null;
 };
 
+/** Where an individual lender asked to be reimbursed, as the borrower was shown it. */
+export type ChargePayout = {
+  provider: string;
+  handle: string;
+  display_name: string | null;
+};
+
+/**
+ * One money term on the instrument.
+ *
+ * Unlike assets, these need no separate snapshot: `agreement_charges` rows are
+ * frozen in place by `agreement_charge_frozen_after_send` once the agreement
+ * leaves draft, so the live row IS the frozen record. The payout handle is the
+ * exception — that lives in a table the lender can still edit — which is what
+ * `payout_snapshot` on the charge is for.
+ */
+export type ChargeFacts = {
+  kind: string;
+  amount_cents: number;
+  currency: string;
+  detail: string | null;
+  settlement: string;
+  payout: ChargePayout | null;
+};
+
 export type RenderedClause = {
   ordinal: number;
   clause_version_id: string;
@@ -85,6 +110,12 @@ export type AssembledDocument = {
   asset: AssetFacts;
   /** Sum across the bundle. Equals the lead item's value when there is one item. */
   totalDeclaredValueCents: number | null;
+  /** Money terms, in canonical order. Empty on every agreement that charges nothing. */
+  charges: ChargeFacts[];
+  /** Everything owed that is not a deposit. */
+  totalDueCents: number;
+  /** Held, not owed. Kept apart everywhere because it is not revenue. */
+  securityDepositCents: number;
   clauses: RenderedClause[];
   mergeValues: Record<string, string>;
   templateLabel: string;
@@ -184,6 +215,112 @@ function scheduleLines(assets: AssetFacts[]): string[] {
     `   identifier: ${asset.identifier ?? ""}`,
     `   declared_value_cents: ${asset.declared_value_cents ?? ""}`,
   ]);
+}
+
+/**
+ * A deposit is not owed, it is held. Kept apart from the total everywhere it is
+ * shown, because presenting "$625 due" when $500 of it comes back is the kind of
+ * number a borrower argues about afterwards, with reason.
+ */
+function chargeTotals(charges: ChargeFacts[]): {
+  dueCents: number;
+  depositCents: number;
+} {
+  let dueCents = 0;
+  let depositCents = 0;
+  for (const charge of charges) {
+    if (charge.kind === "security_deposit") depositCents += charge.amount_cents;
+    else dueCents += charge.amount_cents;
+  }
+  return { dueCents, depositCents };
+}
+
+/**
+ * The CHARGES block, as it appears in the canonical text.
+ *
+ * Every field a party could rely on is here, the payout handle included. If a
+ * borrower is told to send fifty dollars to @jane-doe, that instruction is part
+ * of what they agreed to and belongs inside the bytes the signature is bound to
+ * — not only in an email that can be edited, lost, or denied later.
+ */
+function chargeLines(charges: ChargeFacts[]): string[] {
+  const { dueCents, depositCents } = chargeTotals(charges);
+
+  // Joined rather than assumed. One currency prints as one word; the day
+  // something mixes them, the totals below are visibly nonsense instead of
+  // quietly wrong.
+  const currencies = Array.from(new Set(charges.map((c) => c.currency))).sort();
+
+  const lines = [
+    "CHARGES",
+    `charge_count: ${charges.length}`,
+    `currency: ${currencies.join("+")}`,
+    `total_due_cents: ${dueCents}`,
+    `security_deposit_cents: ${depositCents}`,
+    "",
+  ];
+
+  charges.forEach((charge, index) => {
+    lines.push(
+      `${index + 1}. kind: ${charge.kind}`,
+      `   amount_cents: ${charge.amount_cents}`,
+      `   currency: ${charge.currency}`,
+      `   settlement: ${charge.settlement}`,
+      `   detail: ${charge.detail ?? ""}`,
+    );
+    if (charge.payout) {
+      lines.push(
+        `   payable_to_provider: ${charge.payout.provider}`,
+        `   payable_to_handle: ${charge.payout.handle}`,
+        `   payable_to_name: ${charge.payout.display_name ?? ""}`,
+      );
+    }
+  });
+
+  return lines;
+}
+
+/**
+ * The handle as the borrower was shown it.
+ *
+ * Snapshot first, live row only while still a draft — the same order of authority
+ * the asset facts use, and for the same reason. Jane changing her Venmo in
+ * September must not rewrite what June's borrower was told to do.
+ */
+function payoutFromRow(row: {
+  payout_snapshot?: unknown;
+  lender_payout_handles?: unknown;
+}): ChargePayout | null {
+  const snapshot = row.payout_snapshot;
+  if (
+    snapshot &&
+    typeof snapshot === "object" &&
+    !Array.isArray(snapshot) &&
+    typeof (snapshot as ChargePayout).handle === "string"
+  ) {
+    const snap = snapshot as Partial<ChargePayout>;
+    return {
+      provider: snap.provider ?? "",
+      handle: snap.handle as string,
+      display_name: snap.display_name ?? null,
+    };
+  }
+
+  // PostgREST types an embedded to-one as a union with an array, exactly as in
+  // the asset load below. Normalised rather than cast blindly.
+  const embedded = row.lender_payout_handles as
+    | ChargePayout
+    | ChargePayout[]
+    | null
+    | undefined;
+  const live = Array.isArray(embedded) ? (embedded[0] ?? null) : (embedded ?? null);
+  if (!live?.handle) return null;
+
+  return {
+    provider: live.provider,
+    handle: live.handle,
+    display_name: live.display_name ?? null,
+  };
 }
 
 /**
@@ -296,6 +433,47 @@ export async function assembleAgreement(
   const bundled = assets.length > 1;
   const totalDeclaredValueCents = totalDeclaredCents(assets);
 
+  // Money terms.
+  //
+  // Ordered by (kind, amount, id) rather than by insertion, because the canonical
+  // text has to come out identical every time it is rebuilt and `created_at` can
+  // tie. The order is arbitrary but total, which is the only property that
+  // matters here.
+  const { data: chargeRows, error: chargesError } = await db
+    .from("agreement_charges")
+    .select(
+      "id, kind, amount_cents, currency, detail, settlement, payout_snapshot, lender_payout_handles(provider, handle, display_name)",
+    )
+    .eq("agreement_id", agreementId)
+    .order("kind")
+    .order("amount_cents")
+    .order("id");
+
+  if (chargesError) throw new RenderError(chargesError.message);
+
+  const charges: ChargeFacts[] = (chargeRows ?? []).map((row: any) => ({
+    kind: row.kind,
+    amount_cents: row.amount_cents,
+    currency: row.currency,
+    detail: row.detail ?? null,
+    settlement: row.settlement,
+    payout: payoutFromRow(row),
+  }));
+
+  // A participant took part; they never took the thing. Putting a deposit or a
+  // fuel share in front of them describes a bailment they are not party to, which
+  // is the whole reason they get their own instrument (20260901000022). The gate
+  // refuses this too — this is the renderer declining to produce the document
+  // even if something got past it.
+  if (participantRelease && charges.length > 0) {
+    throw new RenderError(
+      "a participant release cannot carry charges; money terms belong on the rental agreement in the booking",
+    );
+  }
+
+  const { dueCents: totalDueCents, depositCents: securityDepositCents } =
+    chargeTotals(charges);
+
   const { data: availability } = await db
     .from("state_availability")
     .select("status, waiver_efficacy, clause_set_reviewed_at")
@@ -367,6 +545,19 @@ export async function assembleAgreement(
     mergeValues.item_count = String(assets.length);
   }
 
+  if (charges.length > 0) {
+    // Same reasoning as `item_count`, one step further: MERGE VALUES lists every
+    // key, so adding these unconditionally would change the hash of documents
+    // that are already signed. They appear only on the branch that could not have
+    // existed before charges did.
+    //
+    // Both keys, always, whenever there are charges at all. A damage clause that
+    // reaches for {{security_deposit}} on an agreement with no deposit should
+    // print zero, not throw in `merge()` at the moment a borrower opens the link.
+    mergeValues.total_due = formatCents(totalDueCents);
+    mergeValues.security_deposit = formatCents(securityDepositCents);
+  }
+
   const clauses: RenderedClause[] = (clauseRows ?? []).map((row: any) => ({
     ordinal: row.ordinal,
     clause_version_id: row.clause_version_id,
@@ -397,6 +588,7 @@ export async function assembleAgreement(
     borrower,
     participantRelease,
     assets,
+    charges,
     clauses,
     templateLabel,
     templateBodyHash: templateVersion.body_hash,
@@ -409,6 +601,9 @@ export async function assembleAgreement(
     assets,
     asset,
     totalDeclaredValueCents,
+    charges,
+    totalDueCents,
+    securityDepositCents,
     clauses,
     mergeValues,
     templateLabel,
@@ -424,11 +619,18 @@ export async function assembleAgreement(
       // records the schedule below, single item or not, because that is the form
       // its canonical text takes — and these inputs have to rebuild those exact
       // bytes.
+      //
+      // v3 is the same idea again: it is v1 or v2 with a CHARGES block after the
+      // asset block, and nothing signed before charges existed can reach it. The
+      // asset block keeps whichever shape the item count gives it, so `assets`
+      // below is what tells a rebuilder which of the two to emit.
       format: participantRelease
         ? "iwaiver-participant-v1"
-        : bundled
-          ? "iwaiver-agreement-v2"
-          : "iwaiver-agreement-v1",
+        : charges.length > 0
+          ? "iwaiver-agreement-v3"
+          : bundled
+            ? "iwaiver-agreement-v2"
+            : "iwaiver-agreement-v1",
       agreement_id: agreement.id,
       template_version_id: agreement.template_version_id,
       template_body_hash: templateVersion.body_hash,
@@ -440,6 +642,16 @@ export async function assembleAgreement(
       asset,
       ...(participantRelease || bundled
         ? { assets, total_declared_value_cents: totalDeclaredValueCents }
+        : {}),
+      // v3 only. Recorded in canonical order, with the payout handle exactly as
+      // it was rendered, so the CHARGES block can be rebuilt byte for byte from
+      // these inputs alone.
+      ...(charges.length > 0
+        ? {
+            charges,
+            total_due_cents: totalDueCents,
+            security_deposit_cents: securityDepositCents,
+          }
         : {}),
       merge_values: mergeValues,
       clause_versions: clauses.map((c) => ({
@@ -473,7 +685,7 @@ export async function assembleAgreement(
  * dispute, someone has to be able to look at what was hashed and read it. The
  * ordering is fixed and nothing here depends on locale or map iteration order.
  *
- * TWO FORMATS, AND THE OLDER ONE IS FROZEN.
+ * FOUR FORMATS, AND EVERY OLDER ONE IS FROZEN.
  *
  * V1 is what every agreement signed before bundles existed was hashed as. One
  * item still produces V1, byte for byte, down to the singular `ASSET` header.
@@ -493,6 +705,19 @@ export async function assembleAgreement(
  * because it is new and has no signed past to stay byte-compatible with. No
  * agreement that existed before bookings can reach this branch, so V1 and V2
  * remain exactly as frozen as they were.
+ *
+ * V3 is V1 or V2 with a CHARGES block inserted after the asset block, and it is
+ * reached only when the agreement actually charges something. That condition is
+ * what keeps every existing hash intact: `agreement_charges` was created empty
+ * (20260901000033), so no agreement signed before it can have a row in it, and an
+ * agreement with no charges emits the same bytes it always did — the block is
+ * absent, not empty.
+ *
+ * Note that V3 does NOT force the schedule form the way PARTICIPANT-V1 does. One
+ * item with a deposit keeps the singular ASSET block, because `asset_description`
+ * still has to read "the 2023 Sea-Doo GTI 130" in the clause wording rather than
+ * "the 1 items listed in Schedule A below". The header says V3; the asset block
+ * says which shape it took.
  */
 function canonicalise(input: {
   agreement: AgreementFacts;
@@ -500,6 +725,7 @@ function canonicalise(input: {
   borrower: SignerFacts;
   participantRelease: boolean;
   assets: AssetFacts[];
+  charges: ChargeFacts[];
   clauses: RenderedClause[];
   templateLabel: string;
   templateBodyHash: string;
@@ -509,13 +735,16 @@ function canonicalise(input: {
   // single-item shape is V1's frozen ASSET block and must stay that way.
   const bundled = input.participantRelease || input.assets.length > 1;
   const asset = input.assets[0];
+  const charged = input.charges.length > 0;
 
   const lines: string[] = [
     input.participantRelease
       ? "IWAIVER-PARTICIPANT-V1"
-      : bundled
-        ? "IWAIVER-AGREEMENT-V2"
-        : "IWAIVER-AGREEMENT-V1",
+      : charged
+        ? "IWAIVER-AGREEMENT-V3"
+        : bundled
+          ? "IWAIVER-AGREEMENT-V2"
+          : "IWAIVER-AGREEMENT-V1",
     `agreement_id: ${input.agreement.id}`,
     `template: ${input.templateLabel}`,
     `template_version_id: ${input.agreement.template_version_id}`,
@@ -549,6 +778,9 @@ function canonicalise(input: {
           `make: ${asset.make ?? ""}`,
           `model: ${asset.model ?? ""}`,
         ]),
+    // Absent, not empty, when nothing is charged. An empty CHARGES header would
+    // still be bytes, and bytes are what the frozen hashes were computed without.
+    ...(charged ? ["", ...chargeLines(input.charges)] : []),
     "",
     "MERGE VALUES",
     ...Object.keys(input.mergeValues)

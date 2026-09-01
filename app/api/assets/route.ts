@@ -3,6 +3,8 @@ import { currentUser, userClient } from "@/lib/supabase/server";
 import { ensureIndividualOriginator } from "@/lib/agreements/access";
 import { jsonError, readJson, text } from "@/lib/http";
 import { parseDollarsToCents } from "@/lib/format";
+import { ASSET_COLUMNS_WITH_PHOTOS } from "@/lib/assets/fields";
+import { asCommercialUseRefusal, readMerchandising } from "@/lib/assets/input";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,6 +30,15 @@ type Body = {
   year?: unknown;
   make?: unknown;
   model?: unknown;
+  // The merchandising half, read by readMerchandising rather than field by field
+  // here — see lib/assets/input.ts for why the two halves are parsed apart.
+  headline?: unknown;
+  details_md?: unknown;
+  rate?: unknown;
+  rate_unit?: unknown;
+  deposit?: unknown;
+  quantity?: unknown;
+  is_offerable?: unknown;
 };
 
 export async function GET() {
@@ -38,7 +49,7 @@ export async function GET() {
     const supabase = await userClient();
     const { data, error } = await supabase
       .from("assets")
-      .select("id, asset_class, description, identifier, declared_value_cents, year, make, model")
+      .select(ASSET_COLUMNS_WITH_PHOTOS)
       .is("archived_at", null)
       .order("created_at", { ascending: false });
 
@@ -91,11 +102,19 @@ export async function POST(request: Request) {
         year: Number.isInteger(yearValue) && yearValue > 1900 ? yearValue : null,
         make: text(body.make, 60),
         model: text(body.model, 60),
+        ...readMerchandising(body as Record<string, unknown>),
       })
-      .select("id, asset_class, description, identifier, declared_value_cents, year, make, model")
+      .select(ASSET_COLUMNS_WITH_PHOTOS)
       .single();
 
-    if (error) throw new Error(error.message);
+    if (error) {
+      // A per-period rate on an individual's item is refused by the database, and
+      // that refusal is about their own insurance rather than about this form, so
+      // it reaches them in full rather than as "could not save".
+      const refusal = asCommercialUseRefusal(error.message);
+      if (refusal) throw refusal;
+      throw new Error(error.message);
+    }
     return NextResponse.json({ asset: data }, { status: 201 });
   } catch (error) {
     return jsonError(error);

@@ -10,8 +10,9 @@ import {
 import type { Asset } from "@/components/AssetsManager";
 import type { Contact } from "@/components/ContactsManager";
 import { userClient } from "@/lib/supabase/server";
+import { ASSET_COLUMNS_WITH_PHOTOS } from "@/lib/assets/fields";
 import { requireActor } from "@/lib/agreements/access";
-import { requestForActor } from "@/lib/intake/requests";
+import { requestAddOns, requestForActor } from "@/lib/intake/requests";
 
 export const metadata: Metadata = { title: "Lend something" };
 export const dynamic = "force-dynamic";
@@ -38,11 +39,21 @@ export default async function NewAgreementPage({
         .eq("id", asked.intake_link_id)
         .maybeSingle();
 
+      // The add-ons they ticked, after the thing itself. This is the whole of
+      // what Schedule A gains from a merchandised page: the form opens with the
+      // pontoon and the cooler picked instead of just the pontoon, and a person
+      // still reads it and presses send. Nothing about origination, signing or
+      // the compliance gate knows this happened.
+      const addOns = await requestAddOns(db, asked.id);
+
       prefill = {
         requestId: asked.id,
         borrowerName: asked.borrower_name,
         borrowerEmail: asked.borrower_email ?? "",
-        assetIds: asked.asset_id ? [asked.asset_id] : [],
+        assetIds: [
+          ...(asked.asset_id ? [asked.asset_id] : []),
+          ...addOns.map((item) => item.id),
+        ],
         startsAt: asked.starts_at,
         endsAt: asked.ends_at,
         jurisdiction: link?.jurisdiction ?? null,
@@ -66,7 +77,7 @@ export default async function NewAgreementPage({
   const [{ data: assetRows }, { data: contactRows }] = await Promise.all([
     supabase
       .from("assets")
-      .select("id, asset_class, description, identifier, declared_value_cents, year, make, model")
+      .select(ASSET_COLUMNS_WITH_PHOTOS)
       .is("archived_at", null)
       .order("created_at", { ascending: false }),
     supabase

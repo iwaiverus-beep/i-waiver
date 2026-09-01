@@ -1,6 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { formatRate, orderedPhotos, photoUrl } from "@/lib/assets/fields";
+import { formatCents } from "@/lib/format";
+import { itemTitle, type ListingItem } from "@/components/ItemListing";
 
 /**
  * The borrower's side, filled in on their own phone.
@@ -29,10 +32,40 @@ function asInstant(value: FormDataEntryValue | null): string | null {
   return Number.isNaN(instant.getTime()) ? null : instant.toISOString();
 }
 
-export function StartRequestForm({ slug, lender }: { slug: string; lender: string }) {
+/** An add-on: one of the lender's other items, suggested alongside this one. */
+export type Offer = ListingItem & { default_selected?: boolean };
+
+export function StartRequestForm({
+  slug,
+  lender,
+  offers = [],
+}: {
+  slug: string;
+  lender: string;
+  offers?: Offer[];
+}) {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+
+  // Ticked to start with only where the lender said so — the thing that genuinely
+  // goes with it every time, like the trailer with the boat. Never as a way to
+  // slip a charge past somebody.
+  const [picked, setPicked] = useState<string[]>(() =>
+    offers.filter((offer) => offer.default_selected).map((offer) => offer.id),
+  );
+
+  // Only ever a subtotal of what is being ASKED, and labelled as one. It excludes
+  // the thing itself deliberately: adding a day rate to a flat delivery fee makes
+  // a number that is not any real total, and a borrower who reads it as one has
+  // been misled by arithmetic nobody checked.
+  const extras = useMemo(
+    () =>
+      offers
+        .filter((offer) => picked.includes(offer.id))
+        .reduce((sum, offer) => sum + (offer.rate_cents ?? 0), 0),
+    [offers, picked],
+  );
 
   if (done) {
     return (
@@ -72,6 +105,7 @@ export function StartRequestForm({ slug, lender }: { slug: string; lender: strin
           starts_at: asInstant(form.get("starts_at")),
           ends_at: asInstant(form.get("ends_at")),
           note: form.get("note") || null,
+          add_on_ids: picked,
         }),
       });
 
@@ -85,8 +119,88 @@ export function StartRequestForm({ slug, lender }: { slug: string; lender: strin
     }
   }
 
+  function toggle(offerId: string) {
+    setPicked((current) =>
+      current.includes(offerId)
+        ? current.filter((id) => id !== offerId)
+        : [...current, offerId],
+    );
+  }
+
   return (
     <form onSubmit={submit} className="mt-8 space-y-5">
+      {offers.length > 0 && (
+        <fieldset className="rounded-2xl border border-line bg-surface/50 p-5">
+          <legend className="px-1 text-xs font-semibold uppercase tracking-wider text-ink-muted">
+            Anything else?
+          </legend>
+
+          <div className="mt-2 space-y-2">
+            {offers.map((offer) => {
+              const rate = formatRate(offer.rate_cents, offer.rate_unit);
+              const photo = orderedPhotos(offer.asset_photos)[0];
+              const chosen = picked.includes(offer.id);
+
+              return (
+                <label
+                  key={offer.id}
+                  className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition-colors ${
+                    chosen ? "border-ink bg-paper" : "border-line hover:border-ink/40"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={chosen}
+                    onChange={() => toggle(offer.id)}
+                    className="h-4 w-4 shrink-0 accent-ink"
+                  />
+
+                  {photo && (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img
+                      src={photoUrl(photo.storage_path)}
+                      alt=""
+                      className="h-12 w-12 shrink-0 rounded-lg object-cover"
+                    />
+                  )}
+
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold text-ink">
+                      {itemTitle(offer)}
+                    </span>
+                    {offer.headline && (
+                      <span className="block truncate text-xs text-ink-soft">
+                        {offer.headline}
+                      </span>
+                    )}
+                  </span>
+
+                  {rate && (
+                    <span className="shrink-0 text-sm font-semibold tabular-nums text-ink">
+                      {rate}
+                    </span>
+                  )}
+                </label>
+              );
+            })}
+          </div>
+
+          {extras > 0 && (
+            <p className="mt-3 text-sm text-ink-soft">
+              Extras{" "}
+              <span className="font-semibold tabular-nums text-ink">
+                {formatCents(extras)}
+              </span>
+            </p>
+          )}
+
+          <p className="mt-3 text-xs leading-relaxed text-ink-muted">
+            Ticking these tells {lender} what you want. They confirm what is
+            available and what it comes to when they send you the agreement.
+          </p>
+        </fieldset>
+      )}
+
       <label className="block">
         <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink-muted">
           Your name

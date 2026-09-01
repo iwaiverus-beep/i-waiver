@@ -58,6 +58,8 @@ export async function submitRequest(
     startsAt: string | null;
     endsAt: string | null;
     note: string | null;
+    /** Add-ons the borrower ticked. Ids only, and checked against what was offered. */
+    addOnIds: string[];
     ip: string | null;
     userAgent: string | null;
   },
@@ -111,7 +113,97 @@ export async function submitRequest(
     .single();
 
   if (error || !data) throw new Error(`could not file the request: ${error?.message}`);
+
+  // The add-ons, filtered against what this code actually offered.
+  //
+  // This is the same split the rest of the function turns on. A borrower says
+  // WHICH of the suggestions they want; they do not get to name an item. An id
+  // that was not on the page is dropped rather than refused — the honest reading
+  // of an unexpected id is a stale page or a fiddled form, and in both cases the
+  // request is still a real one from a real person standing at a counter.
+  const offered = new Map(resolved.offers.map((offer, index) => [offer.id, index]));
+  const chosen = input.addOnIds
+    .filter((assetId) => offered.has(assetId))
+    .sort((a, b) => (offered.get(a) ?? 0) - (offered.get(b) ?? 0));
+
+  if (chosen.length > 0) {
+    const { error: itemsError } = await db.from("agreement_request_items").insert(
+      chosen.map((assetId, index) => ({
+        request_id: data.id,
+        asset_id: assetId,
+        order_index: index,
+      })),
+    );
+
+    // Not fatal. The request itself is the thing that must survive — a lender
+    // with a name and a phone number can ask what else they wanted, and losing
+    // the borrower over a cooler would be the worse trade.
+    if (itemsError) {
+      console.error(`request ${data.id}: could not record add-ons:`, itemsError.message);
+    }
+  }
+
   return data;
+}
+
+/**
+ * The add-ons on a request, in the order they were shown.
+ *
+ * Read separately rather than embedded for the same reason `offersFor` is two
+ * queries: `agreement_request_items` and `assets` join cleanly, but the lender's
+ * queue wants the item's own facts and PostgREST would need naming which foreign
+ * key to follow.
+ */
+export type RequestAddOn = {
+  id: string;
+  description: string;
+  rate_cents: number | null;
+  rate_unit: string | null;
+};
+
+export async function requestAddOns(
+  db: SupabaseClient,
+  requestId: string,
+): Promise<RequestAddOn[]> {
+  const byRequest = await addOnsForRequests(db, [requestId]);
+  return byRequest.get(requestId) ?? [];
+}
+
+/**
+ * The same thing for a whole queue, in two queries rather than two per row.
+ *
+ * The queue is the screen that matters: a lender with eight requests waiting
+ * should not pay eight round trips to find out that two of them wanted a cooler.
+ */
+export async function addOnsForRequests(
+  db: SupabaseClient,
+  requestIds: string[],
+): Promise<Map<string, RequestAddOn[]>> {
+  const out = new Map<string, RequestAddOn[]>();
+  if (requestIds.length === 0) return out;
+
+  const { data: items } = await db
+    .from("agreement_request_items")
+    .select("request_id, asset_id, order_index")
+    .in("request_id", requestIds)
+    .order("order_index");
+
+  if (!items || items.length === 0) return out;
+
+  const { data: assets } = await db
+    .from("assets")
+    .select("id, description, rate_cents, rate_unit")
+    .in("id", [...new Set(items.map((item) => item.asset_id))]);
+
+  const byId = new Map((assets ?? []).map((asset) => [asset.id, asset as RequestAddOn]));
+
+  for (const item of items) {
+    const asset = byId.get(item.asset_id);
+    if (!asset) continue;
+    out.set(item.request_id, [...(out.get(item.request_id) ?? []), asset]);
+  }
+
+  return out;
 }
 
 /**

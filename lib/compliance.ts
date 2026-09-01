@@ -19,7 +19,8 @@ export type CheckKind =
   | "operator_age"
   | "education_cert"
   | "identity"
-  | "jurisdiction_supported";
+  | "jurisdiction_supported"
+  | "commercial_use";
 
 export type CheckResult = "pass" | "fail" | "warn" | "skipped";
 
@@ -91,7 +92,7 @@ export async function runComplianceGate(
 ): Promise<GateOutcome> {
   const { data: agreement } = await db
     .from("agreements")
-    .select("id, jurisdiction, activity_class")
+    .select("id, jurisdiction, activity_class, originator_id")
     .eq("id", input.agreementId)
     .single();
 
@@ -277,6 +278,145 @@ export async function runComplianceGate(
         message: "Education card is attested by the signer at signing.",
         evidence: { deferred_to: "sign", authority: ruleSet.education_authority },
       });
+    }
+  }
+
+  // --- Commercial use -------------------------------------------------------
+  //
+  // Charging for the USE of the thing turns a gratuitous bailment into a bailment
+  // for hire, and personal watercraft, boat and auto policies exclude use for a
+  // fee. So an individual who charges a usage fee has no policy that responds, and
+  // anything we bound beside it was priced against a risk that no longer exists.
+  //
+  // Which makes the fee schedule a rating input, not decoration — and makes this
+  // gate the place it is caught, because a refusal here can explain itself and
+  // leave a row naming the rule set it applied. `agreement_charges` carries the
+  // same rule as a trigger (20260901000033); that is the floor under this, not a
+  // substitute for it.
+  //
+  // Reimbursement does not trip any of this. Splitting a tank of fuel is not
+  // consideration for the use of the thing, and refusing it would break the
+  // ordinary P2P case the product exists to serve.
+  //
+  // Unlike the attestations above, nothing here depends on who is signing, so it
+  // runs identically at send and at sign. The terms were fixed in draft; if they
+  // have somehow changed by signing time, that is exactly when we want to know.
+  const { data: charges } = await db
+    .from("agreement_charges")
+    .select("id, kind, amount_cents, settlement, status")
+    .eq("agreement_id", input.agreementId);
+
+  if (!charges || charges.length === 0) {
+    findings.push({
+      kind: "commercial_use",
+      result: "skipped",
+      blocking: false,
+      message: "Nothing is being charged on this agreement.",
+      evidence: { charge_count: 0 },
+    });
+  } else {
+    const { data: originator } = await db
+      .from("originators")
+      .select("id, kind, org_id")
+      .eq("id", agreement.originator_id)
+      .maybeSingle();
+
+    const isOrganization = originator?.kind === "organization";
+    const usageFees = charges.filter((c) => c.kind === "usage_fee");
+    const platformCharges = charges.filter((c) => c.settlement === "platform");
+
+    // A participant took part; they never took the thing. A deposit or a fuel
+    // share put in front of them is a term about a bailment they are not a party
+    // to — the same reason they get their own instrument (20260901000022).
+    const participants = (signers ?? []).filter((s) => s.role === "participant");
+
+    const problems: { message: string; evidence: Record<string, unknown> }[] = [];
+
+    if (usageFees.length > 0 && !isOrganization) {
+      problems.push({
+        message:
+          "A usage fee makes this a rental rather than a loan, and a personal policy will not respond to it. An individual lender can share costs — fuel, cleaning, the launch fee, delivery — and hold a deposit, but charging for the use of the thing needs a business account so commercial cover can be quoted.",
+        evidence: {
+          reason: "usage_fee_by_individual",
+          originator_kind: originator?.kind ?? "unknown",
+          charge_ids: usageFees.map((c) => c.id),
+          remedy: "convert_to_organization",
+        },
+      });
+    }
+
+    if (participants.length > 0) {
+      problems.push({
+        message:
+          "Charges belong on the rental agreement, not on a participant release. Somebody who is only taking part never took custody of anything.",
+        evidence: {
+          reason: "charges_on_participant_release",
+          participant_ids: participants.map((s) => s.id),
+          charge_ids: charges.map((c) => c.id),
+        },
+      });
+    }
+
+    if (platformCharges.length > 0 && !isOrganization) {
+      problems.push({
+        message:
+          "Only a business account can take card payments through us. An individual lender settles directly with the borrower.",
+        evidence: {
+          reason: "platform_settlement_by_individual",
+          originator_kind: originator?.kind ?? "unknown",
+          charge_ids: platformCharges.map((c) => c.id),
+        },
+      });
+    }
+
+    if (platformCharges.length > 0 && originator?.org_id) {
+      // Refuse rather than take money the organization cannot actually receive.
+      // Stripe decides when onboarding is finished; we mirror its answer.
+      const { data: org } = await db
+        .from("organizations")
+        .select("stripe_account_id, stripe_charges_enabled")
+        .eq("id", originator.org_id)
+        .maybeSingle();
+
+      if (!org?.stripe_charges_enabled) {
+        problems.push({
+          message:
+            "Payouts are not switched on for this business yet, so these charges cannot be collected. Finish the payment setup, or settle with the borrower directly.",
+          evidence: {
+            reason: "connect_onboarding_incomplete",
+            has_account: Boolean(org?.stripe_account_id),
+            charges_enabled: false,
+            charge_ids: platformCharges.map((c) => c.id),
+          },
+        });
+      }
+    }
+
+    if (problems.length === 0) {
+      findings.push({
+        kind: "commercial_use",
+        result: "pass",
+        blocking: false,
+        message: isOrganization
+          ? "Commercial terms on a business account."
+          : "Reimbursement and deposit only, which keeps this a loan rather than a rental.",
+        evidence: {
+          originator_kind: originator?.kind ?? "unknown",
+          charge_count: charges.length,
+          kinds: charges.map((c) => c.kind),
+          settlement: Array.from(new Set(charges.map((c) => c.settlement))),
+        },
+      });
+    } else {
+      for (const problem of problems) {
+        findings.push({
+          kind: "commercial_use",
+          result: "fail",
+          blocking: true,
+          message: problem.message,
+          evidence: problem.evidence,
+        });
+      }
     }
   }
 

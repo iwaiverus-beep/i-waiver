@@ -2,14 +2,15 @@ import { NextResponse } from "next/server";
 import { currentUser, userClient } from "@/lib/supabase/server";
 import { jsonError, readJson, text } from "@/lib/http";
 import { parseDollarsToCents } from "@/lib/format";
+import { ASSET_COLUMNS_WITH_PHOTOS } from "@/lib/assets/fields";
+import { asCommercialUseRefusal, readMerchandising } from "@/lib/assets/input";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const ASSET_CLASSES = ["pwc", "boat", "trailer", "vehicle", "equipment", "other"];
 
-const COLUMNS =
-  "id, asset_class, description, identifier, declared_value_cents, year, make, model";
+const COLUMNS = ASSET_COLUMNS_WITH_PHOTOS;
 
 /**
  * Edit one thing you lend.
@@ -80,6 +81,8 @@ export async function PATCH(
       patch.year = Number.isInteger(year) && year > 1900 && year <= 2100 ? year : null;
     }
 
+    Object.assign(patch, readMerchandising(body));
+
     if (Object.keys(patch).length === 0) {
       return NextResponse.json({ error: "Nothing to change." }, { status: 400 });
     }
@@ -93,7 +96,11 @@ export async function PATCH(
       .select(COLUMNS)
       .maybeSingle();
 
-    if (error) throw new Error(error.message);
+    if (error) {
+      const refusal = asCommercialUseRefusal(error.message);
+      if (refusal) throw refusal;
+      throw new Error(error.message);
+    }
     if (!data) return NextResponse.json({ error: "Not found." }, { status: 404 });
 
     return NextResponse.json({ asset: data });

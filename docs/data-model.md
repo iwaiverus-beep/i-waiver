@@ -401,7 +401,7 @@ Append-only. No updates, no deletes. Enforce with a trigger and revoke UPDATE/DE
 | `id` | bigserial |
 | `agreement_id` | FK |
 | `signer_id` | nullable |
-| `event_type` | `created`, `sent`, `delivered`, `opened`, `consented`, `viewed_clause`, `identity_verified`, `compliance_checked`, `signed`, `quoted`, `bound`, `paid`, `voided` |
+| `event_type` | `created`, `sent`, `delivered`, `opened`, `consented`, `viewed_clause`, `identity_verified`, `compliance_checked`, `signed`, `quoted`, `bound`, `paid`, `charge_stated`, `settlement_asserted`, `voided` |
 | `occurred_at` | |
 | `actor` | `lender`, `borrower`, `system`, `carrier` |
 | `ip`, `user_agent`, `geo` | |
@@ -450,7 +450,7 @@ Versioned dataset, not code. You need to prove which rules were applied on a giv
 |---|---|
 | `agreement_id`, `signer_id` | |
 | `rule_set_id` | which version was applied |
-| `check_kind` | `operator_age`, `education_cert`, `identity`, `jurisdiction_supported` |
+| `check_kind` | `operator_age`, `education_cert`, `identity`, `jurisdiction_supported`, `commercial_use` |
 | `result` | `pass`, `fail`, `warn`, `skipped` |
 | `evidence` | jsonb — cert number, DOB source |
 | `blocking` | bool |
@@ -510,6 +510,115 @@ Split premium from your fee **at the schema level, day one**.
 
 If the carrier collects premium and pays you commission, `collector = 'carrier'` and
 most of the fiduciary problem disappears. Ask them before writing payment code.
+
+---
+
+## Money between the parties — added 20260901000031–33
+
+Premium is not the only money in a loan. There is also a damage deposit, prepaid fuel,
+and — for a rental shop — the rental fee itself.
+
+**None of it goes in `payments`.** That table is premium, which may be held in a
+producer capacity; this is the lender's ordinary trade income. Mixing them undoes the
+separation `payments` was written to create.
+
+### The line that runs through all of it
+
+A usage fee is not a bigger version of a fuel reimbursement. Charging for the *use* of
+the thing turns a gratuitous bailment into a **bailment for hire**, and personal
+watercraft, boat and auto policies exclude use for a fee. The moment an individual
+charges one, their own policy stops responding and anything we bound beside it was
+priced against a risk that no longer exists.
+
+Worse than not knowing: printing a fee schedule on an instrument *we* generate
+manufactures the document that proves the exclusion applies.
+
+So the fee schedule is a rating input, and the split falls out of it:
+
+| | Individual originator | Organization originator |
+|---|---|---|
+| Security deposit | yes | yes |
+| Fuel, cleaning, launch fee, delivery | yes — cost reimbursement | yes |
+| **Usage fee** | **refused** | yes |
+| Settlement | `direct` — we relay a handle | `platform` — Stripe Connect |
+
+Reimbursement is not consideration for the use of the thing, so it does not trip the
+gate. That is the ordinary P2P case and it must keep working.
+
+Refusing a usage fee is also the conversion prompt: someone who keeps trying to enter a
+daily rate is running a rental business, and the honest answer is to say so and offer
+the upgrade to an organization.
+
+### `agreement_charges`
+
+One row per line item. Two lifecycles in one enum, kept apart by check constraints —
+a deposit runs `quoted → authorized → captured | released`, everything else runs
+`quoted → paid | refunded | waived`.
+
+| column | notes |
+|---|---|
+| `agreement_id` | |
+| `kind` | `security_deposit`, `fuel`, `cleaning`, `launch_fee`, `delivery`, `usage_fee` |
+| `amount_cents`, `currency` | |
+| `settlement` | `platform` \| `direct` — fixed by the originator's kind |
+| `status` | see above |
+| `stripe_payment_intent_id` | platform road only |
+| `authorization_expires_at` | required while a hold is live — see below |
+| `payout_handle_id`, `payout_snapshot` | direct road; the snapshot is what the borrower was shown |
+| `settlement_asserted_by/_at` | the lender's word that it was settled. Not evidence |
+| `environment` | sandbox money is not money |
+
+Two triggers, because both rules are load-bearing enough not to depend on a caller
+remembering the gate: `agreement_charge_commercial_use_guard` refuses a usage fee on an
+individual's agreement, and `agreement_charge_frozen_after_send` freezes kind, amount
+and settlement once the agreement leaves draft. Status still moves — that is the record
+of what happened, not a revision of what was agreed.
+
+**The money terms belong in the signed instrument, not only in a confirmation email.**
+A schedule that exists solely in an email is a side note neither party agreed to, and
+unenforceable.
+
+**The seven-day problem.** A Stripe authorisation expires in roughly a week. A
+fortnight on a boat outlives it, and a deposit everyone believes is held but is not is
+worse than no deposit. `authorization_expires_at` exists so a re-authorisation job has
+something to select on; `agreement_charges_expiring_hold_idx` is that job's whole query.
+
+### `lender_payout_handles`
+
+Where an individual would like to be reimbursed. We relay it and settle nothing.
+
+| column | notes |
+|---|---|
+| `originator_id`, `originator_kind` | composite FK to `originators (id, kind)` — individuals only, structurally |
+| `provider` | `venmo`, `cashapp`, `zelle`, `paypal`, `other` |
+| `handle` | constrained to a character set that cannot express a URL |
+| `confirmed_at` | the lender confirmed we transcribed it. **Not** verification that the account exists |
+
+`originators.kind` is a stored generated column, so the composite FK makes it impossible
+to hang a personal payment handle off an organization — which would otherwise send a
+business's customers to someone's personal account.
+
+**There is no QR image column, deliberately.** We render this into mail that goes out
+under our name. An uploaded QR is an arbitrary destination we would forward on a
+lender's word. Generate the QR from the validated handle; never accept an image.
+
+Framing in the relay email matters too: *"Jane asked us to pass along how she'd like to
+be reimbursed"* — not "Pay now". We are relaying a message between two people who
+already know each other, which is both true and what keeps us from resembling a
+collector. Personal-handle transfers also carry no dispute recourse; say so.
+
+Note that Venmo's own terms require a business profile for commercial transactions.
+Holding the P2P line items to reimbursement keeps our users inside Venmo's rules as well
+as the carrier's.
+
+### Organizations — Stripe Connect
+
+`stripe_account_id`, `stripe_charges_enabled`, `stripe_onboarded_at` on `organizations`.
+The org is merchant of record; funds settle to it and we take an application fee. We are
+never in the flow of funds — the same instinct as `collector = 'carrier'`.
+
+A platform charge must refuse until `stripe_charges_enabled` is true, rather than taking
+money the org cannot receive.
 
 ---
 

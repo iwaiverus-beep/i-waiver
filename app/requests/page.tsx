@@ -4,7 +4,8 @@ import { redirect } from "next/navigation";
 import { Container } from "@/components/ui";
 import { Note } from "@/components/app-ui";
 import { requireActor } from "@/lib/agreements/access";
-import { pendingRequests } from "@/lib/intake/requests";
+import { addOnsForRequests, pendingRequests } from "@/lib/intake/requests";
+import { formatRate, type RateUnit } from "@/lib/assets/fields";
 import { DeclineRequest } from "@/components/DeclineRequest";
 
 export const metadata: Metadata = { title: "Requests" };
@@ -38,6 +39,10 @@ function when(value: string | null): string {
 export default async function RequestsPage() {
   const { db, originatorIds } = await requireActor();
   const waiting = await pendingRequests(db, originatorIds);
+  const addOns = await addOnsForRequests(
+    db,
+    waiting.map((request) => request.id),
+  );
 
   // Exactly one: skip the list entirely. Nothing is created by this redirect —
   // it opens the form, prefilled, and the lender still presses the button.
@@ -88,6 +93,37 @@ export default async function RequestsPage() {
                       ? `${when(request.starts_at)} → ${when(request.ends_at)}`
                       : "No dates given — you set them."}
                   </p>
+
+                  {(addOns.get(request.id)?.length ?? 0) > 0 && (
+                    <div className="mt-2 rounded-xl bg-surface/60 px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
+                        They also asked for
+                      </p>
+                      <ul className="mt-1.5 space-y-1">
+                        {addOns.get(request.id)?.map((item) => {
+                          const rate = formatRate(
+                            item.rate_cents,
+                            item.rate_unit as RateUnit | null,
+                          );
+                          return (
+                            <li
+                              key={item.id}
+                              className="flex items-baseline justify-between gap-4 text-sm text-ink-soft"
+                            >
+                              <span>{item.description}</span>
+                              {rate && (
+                                <span className="shrink-0 tabular-nums">{rate}</span>
+                              )}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                      <p className="mt-2 text-xs text-ink-muted">
+                        These open on the form with the main item, ready for you to
+                        confirm or take off.
+                      </p>
+                    </div>
+                  )}
 
                   {request.note && (
                     <p className="mt-2 rounded-xl bg-surface/60 px-4 py-3 text-sm leading-relaxed text-ink-soft">
