@@ -80,6 +80,23 @@ export function bootstrapAdminEmails(): string[] {
     .filter(Boolean);
 }
 
+/**
+ * How long a signed record is kept, in years.
+ *
+ * Constraint 8: a floor in config, never a hardcoded TTL. Launch setting is three
+ * years — see docs/data-model.md for where that number comes from and why it is
+ * the floor rather than the target. Read here so the number a lender is shown on
+ * screen and the number any future purge job obeys are the same number.
+ *
+ * Floors lengthen and deletions do not reverse, so a value below the launch
+ * setting is ignored: shortening retention is a decision that has to be made in
+ * this file, deliberately, not by a typo in an environment variable.
+ */
+export function retentionFloorYears(): number {
+  const configured = Number(optional("RETENTION_FLOOR_YEARS"));
+  return Number.isFinite(configured) && configured > 3 ? Math.trunc(configured) : 3;
+}
+
 /** Where a new partner application is announced internally. */
 export const partnerNotificationEmail = () =>
   optional("PARTNER_NOTIFICATIONS_EMAIL");

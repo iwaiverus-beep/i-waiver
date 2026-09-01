@@ -3,18 +3,24 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Container } from "@/components/ui";
 import { AppNav } from "@/components/AppNav";
-import { Empty, Note, StatusBadge } from "@/components/app-ui";
+import { AgreementsList } from "@/components/AgreementsList";
+import { Note } from "@/components/app-ui";
 import { userClient } from "@/lib/supabase/server";
-import { formatDate } from "@/lib/format";
 import { requireActor } from "@/lib/agreements/access";
+import { fetchAgreementPage, fetchListSummary } from "@/lib/agreements/list";
+import { parseListParams } from "@/lib/agreements/list-types";
+import { countFinishedBefore, defaultSweepCutoff } from "@/lib/agreements/archive";
+import { retentionFloorYears } from "@/lib/env";
 import { pendingRequests } from "@/lib/intake/requests";
 
 export const metadata: Metadata = { title: "Your agreements" };
 export const dynamic = "force-dynamic";
 
-type SignerRow = { role: string; display_name: string; signed_at: string | null };
-
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const supabase = await userClient();
   const {
     data: { user },
@@ -22,29 +28,38 @@ export default async function DashboardPage() {
 
   if (!user) redirect("/login?next=/dashboard");
 
+  // Filters survive a refresh and a shared link, so the first page rendered here
+  // has to be the page the URL asks for — not the default one, briefly, followed
+  // by a fetch that replaces it.
+  const resolved = await searchParams;
+  const params = parseListParams(
+    new URLSearchParams(
+      Object.entries(resolved).flatMap(([key, value]) =>
+        value === undefined ? [] : [[key, Array.isArray(value) ? value[0] : value]],
+      ),
+    ),
+  );
+
   // Read as the signed-in user, not as the service role: the participation
   // policies decide what comes back, which is exactly the check we want here.
-  const { data: agreements } = await supabase
-    .from("agreements")
-    .select(
-      "id, status, jurisdiction, activity_class, starts_at, ends_at, created_at, executed_at, signers(role, display_name, signed_at), agreement_assets(count)",
-    )
-    .order("created_at", { ascending: false })
-    .limit(100);
+  const [page, counts] = await Promise.all([
+    fetchAgreementPage(supabase, params),
+    fetchListSummary(supabase),
+  ]);
 
   // The inbound queue. Read on the service client through the actor's originators,
   // because agreement_requests is lender-side only and has no participation policy
   // to lean on — a request has no signers yet, which is the whole point of it.
-  const { db, originatorIds } = await requireActor();
-  const waiting = await pendingRequests(db, originatorIds);
+  const actor = await requireActor();
+  const waiting = await pendingRequests(actor.db, actor.originatorIds);
   const waitingCount = waiting.length;
   const firstRequestId = waiting[0]?.id;
 
-  const rows = agreements ?? [];
-  const drafts = rows.filter((a) => a.status === "draft").length;
-  const awaiting = rows.filter((a) =>
-    ["sent", "partially_signed"].includes(a.status),
-  ).length;
+  // How much of the list has run its course. Counted here rather than in the
+  // browser so the offer to tidy up arrives with the page instead of appearing
+  // under the reader's thumb a moment later.
+  const sweepBefore = defaultSweepCutoff();
+  const sweepCount = await countFinishedBefore(actor, sweepBefore);
 
   return (
     <Container className="py-14 sm:py-20">
@@ -53,11 +68,6 @@ export default async function DashboardPage() {
           same place on every lender screen rather than moving around. */}
       <div>
         <h1 className="font-serif text-3xl tracking-tight">Your agreements</h1>
-        <p className="mt-2 text-sm text-ink-soft">
-          {rows.length === 0
-            ? "Nothing here yet."
-            : `${rows.length} total · ${drafts} draft · ${awaiting} waiting on a signature`}
-        </p>
       </div>
 
       {/* Somebody has scanned a code and is, quite possibly, standing there.
@@ -89,63 +99,30 @@ export default async function DashboardPage() {
         </Link>
       )}
 
-      <div className="mt-10 space-y-3">
-        {rows.length === 0 && (
-          <div className="rounded-2xl border border-line bg-paper px-6 py-12">
-            <Empty>
-              Start by describing what you are lending, to whom, and for how long.
-            </Empty>
-          </div>
-        )}
+      <AgreementsList
+        initialPage={page}
+        initialParams={params}
+        initialCounts={counts}
+        viewerEmail={user.email ?? null}
+        sweep={{ count: sweepCount, before: sweepBefore.toISOString() }}
+      />
 
-        {rows.map((agreement) => {
-          const signers = (agreement.signers ?? []) as SignerRow[];
-          const borrower = signers.find((s) => s.role === "borrower");
-          const outstanding = signers.filter((s) => !s.signed_at);
-          // PostgREST returns an aggregate embed as a one-element array.
-          const itemCount =
-            (agreement.agreement_assets as unknown as { count: number }[] | null)?.[0]
-              ?.count ?? 1;
-
-          return (
-            <Link
-              key={agreement.id}
-              href={`/agreements/${agreement.id}`}
-              className="block rounded-2xl border border-line bg-paper px-6 py-5 transition-colors hover:border-ink/25"
-            >
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <p className="text-base font-semibold text-ink">
-                    {borrower?.display_name ?? "No borrower yet"}
-                  </p>
-                  <p className="mt-1 text-sm text-ink-soft">
-                    {itemCount > 1
-                      ? `${itemCount} items`
-                      : agreement.activity_class.replace(/_/g, " ")}{" "}
-                    in {agreement.jurisdiction} ·{" "}
-                    {formatDate(agreement.starts_at)} to {formatDate(agreement.ends_at)}
-                  </p>
-                  {outstanding.length > 0 && agreement.status !== "draft" && (
-                    <p className="mt-1.5 text-xs text-ink-muted">
-                      Waiting on{" "}
-                      {outstanding.map((s) => s.display_name).join(" and ")}
-                    </p>
-                  )}
-                </div>
-                <StatusBadge status={agreement.status} />
-              </div>
-            </Link>
-          );
-        })}
-      </div>
-
-      {rows.some((a) => a.status === "draft") && (
+      {counts.drafts > 0 && (
         <div className="mt-8">
           <Note>
             A draft is not an agreement. Nothing is frozen, nobody has been asked to
             sign, and the asset details can still change underneath it.
           </Note>
         </div>
+      )}
+
+      {counts.archived > 0 && (
+        <p className="mt-6 text-xs leading-relaxed text-ink-muted">
+          Filing an agreement away hides it from this list and nothing else. Every
+          agreement, its signatures and its audit trail are kept for{" "}
+          {retentionFloorYears()} years, and an archived one still opens, still
+          downloads and still verifies.
+        </p>
       )}
     </Container>
   );

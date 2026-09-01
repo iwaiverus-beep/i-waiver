@@ -3,9 +3,13 @@ import { requestContext } from "@/lib/audit";
 import { createDraftAgreement } from "@/lib/agreements/create";
 import {
   ensureIndividualOriginator,
+  NotAuthorised,
   originatorKind,
   requireActor,
 } from "@/lib/agreements/access";
+import { userClient } from "@/lib/supabase/server";
+import { fetchAgreementPage } from "@/lib/agreements/list";
+import { parseListParams } from "@/lib/agreements/list-types";
 import { EMAIL_PATTERN, jsonError, readJson, text } from "@/lib/http";
 import { TransitionRefused } from "@/lib/agreements/lifecycle";
 import { parseDollarsToCents, asIanaZone } from "@/lib/format";
@@ -43,6 +47,33 @@ type Body = {
 };
 
 const ASSET_CLASSES = ["pwc", "boat", "trailer", "vehicle", "equipment", "other"];
+
+/**
+ * GET /api/agreements — one page of the lender's list.
+ *
+ * The dashboard renders its first page on the server; this is what every page
+ * after it comes from as the reader scrolls. Same parameters, same code, so the
+ * twenty-sixth row cannot be sorted or filtered differently from the twenty-fifth.
+ *
+ * Read on the USER's client, not the service role. `agreement_list` is
+ * security_invoker, so the participation policy answers the only authorisation
+ * question this endpoint has — which is why there is no originator check here
+ * and why there must not be a service client on this path.
+ */
+export async function GET(request: Request) {
+  try {
+    const supabase = await userClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) throw new NotAuthorised("You need to be signed in.");
+
+    const params = parseListParams(new URL(request.url).searchParams);
+    return NextResponse.json(await fetchAgreementPage(supabase, params));
+  } catch (error) {
+    return jsonError(error);
+  }
+}
 
 /**
  * POST /api/agreements — create a draft.
