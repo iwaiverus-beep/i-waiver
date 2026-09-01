@@ -27,9 +27,25 @@ import type {
  * do, the boundary has stopped being real.
  */
 
+/**
+ * Sandbox and live.
+ *
+ * Resolved from the credential in lib/coverage/auth.ts and never from anything
+ * the caller sends. It is carried onto every row this module writes, so a
+ * partner's test traffic can be excluded from reporting and deleted outright
+ * without any statement ever having to distinguish it by inspection.
+ */
+export type ApiEnvironment = "sandbox" | "live";
+
 export type Caller =
-  | { source: "first_party" }
-  | { source: "partner"; partnerId: string; allowedJurisdictions: string[] };
+  | { source: "first_party"; environment: "live" }
+  | {
+      source: "partner";
+      partnerId: string;
+      integrationId: string;
+      environment: ApiEnvironment;
+      allowedJurisdictions: string[];
+    };
 
 export class CoverageRejection extends Error {
   constructor(
@@ -95,7 +111,11 @@ function validateContext(request: QuoteRequest, caller: Caller) {
  * it is checked before a price is ever shown. Quoting in a state the carrier
  * cannot write in produces a number nobody can honour.
  */
-async function assertStateOpen(db: SupabaseClient, state: string) {
+async function assertStateOpen(
+  db: SupabaseClient,
+  state: string,
+  environment: ApiEnvironment,
+) {
   const { data } = await db
     .from("state_availability")
     .select("state, status, carrier_admitted, product_codes")
@@ -103,6 +123,25 @@ async function assertStateOpen(db: SupabaseClient, state: string) {
     .maybeSingle();
 
   if (!data || !data.carrier_admitted) {
+    // A sandbox call is allowed to quote where we are not admitted, and this is
+    // the one place the two environments genuinely behave differently.
+    //
+    // The reason is that a partner has to be able to finish their integration
+    // before we open their states — otherwise the sequencing is: sign the
+    // contract, wait for a filing, then start building. What they must never get
+    // is a sandbox that lies about live: the response says `sandbox`, every
+    // summary says so in words, and the policy number the mock carrier returns
+    // starts MOCK-. If a partner can mistake this for a real quote, that is a bug
+    // in how it is labelled, not a reason to close the door.
+    if (environment === "sandbox") {
+      return {
+        state,
+        status: "sandbox",
+        carrier_admitted: false,
+        product_codes: data?.product_codes ?? null,
+      };
+    }
+
     throw new CoverageRejection(
       `No admitted product in ${state}.`,
       422,
@@ -120,7 +159,8 @@ export async function createQuote(
 
   const db = serviceClient();
   const context = request.context;
-  await assertStateOpen(db, context.jurisdiction);
+  const environment = caller.environment;
+  await assertStateOpen(db, context.jurisdiction, environment);
 
   // First-party quotes must carry the reference the schema's check constraint
   // requires. Partner quotes must not: they have no agreement at all.
@@ -138,6 +178,7 @@ export async function createQuote(
     .from("coverage_contexts")
     .insert({
       source: caller.source,
+      environment,
       partner_id: caller.source === "partner" ? caller.partnerId : null,
       external_ref: originating,
       activity_class: context.activity_class,
@@ -146,6 +187,10 @@ export async function createQuote(
       ends_at: context.ends_at,
       parties: context.parties,
       asset: context.asset ?? null,
+      // Persisted so a quote can be reproduced from the row alone. Null for a
+      // single item, which is what every context recorded before bundles
+      // existed already looks like.
+      assets: context.assets?.length ? context.assets : null,
       supplemental: context.supplemental ?? {},
     })
     .select("id")
@@ -174,6 +219,7 @@ export async function createQuote(
   if (carrierQuotes.length === 0) {
     return {
       coverage_context_id: contextRow.id,
+      environment,
       beneficiary_external_ref: request.beneficiary_external_ref,
       options: [],
     };
@@ -184,6 +230,7 @@ export async function createQuote(
 
   const rows = carrierQuotes.map((q) => ({
     coverage_context_id: contextRow.id,
+    environment,
     // Written for first-party reporting. Never read back to make a decision.
     agreement_id: caller.source === "first_party" ? originating : null,
     beneficiary_signer_id: beneficiaryIsSigner ? request.beneficiary_external_ref : null,
@@ -213,6 +260,7 @@ export async function createQuote(
 
   return {
     coverage_context_id: contextRow.id,
+    environment,
     beneficiary_external_ref: request.beneficiary_external_ref,
     options: saved.map((row) => ({
       quote_id: row.id,
@@ -223,9 +271,17 @@ export async function createQuote(
       premium_cents: row.premium_cents,
       rate_plan_version: row.rate_plan_version,
       expires_at: row.expires_at,
-      summary: summaries.get(row.product_code) ?? "",
+      // The label travels with the number. A partner rendering `summary` into
+      // their own UI during development gets a screen that says out loud it is
+      // not real, without having to read the environment field to find out.
+      summary: sandboxLabelled(summaries.get(row.product_code) ?? "", environment),
     })),
   };
+}
+
+/** Prefixes a customer-facing string so a test can never be mistaken for a sale. */
+function sandboxLabelled(summary: string, environment: ApiEnvironment): string {
+  return environment === "sandbox" ? `[SANDBOX — not real cover] ${summary}` : summary;
 }
 
 export async function bindQuotes(
@@ -241,7 +297,7 @@ export async function bindQuotes(
   const { data: quotes, error } = await db
     .from("quotes")
     .select(
-      "id, coverage_context_id, agreement_id, beneficiary_signer_id, source, product_code, coverage_kind, premium_cents, expires_at, carrier_quote_ref, coverage_contexts(id, partner_id, activity_class, jurisdiction, starts_at, ends_at, parties, asset, supplemental)",
+      "id, coverage_context_id, agreement_id, beneficiary_signer_id, source, environment, product_code, coverage_kind, premium_cents, expires_at, carrier_quote_ref, coverage_contexts(id, partner_id, activity_class, jurisdiction, starts_at, ends_at, parties, asset, assets, supplemental)",
     )
     .in("id", request.quote_ids);
 
@@ -267,6 +323,18 @@ export async function bindQuotes(
     }
     if (caller.source === "first_party" && quote.source !== "first_party") {
       throw new CoverageRejection("That quote belongs to a partner integration.", 403);
+    }
+
+    // A key binds only what a key of its own environment quoted. Without this,
+    // the first mistake anyone makes in integration — sandbox key in one config
+    // file, live key in another — turns a test into a real policy, or a real
+    // quote into a row that a sandbox purge would silently delete.
+    if (quote.environment !== caller.environment) {
+      throw new CoverageRejection(
+        `That quote was created in ${quote.environment}. Bind it with a ${quote.environment} key.`,
+        409,
+        "environment_mismatch",
+      );
     }
 
     if (quote.expires_at && new Date(quote.expires_at) < new Date()) {
@@ -308,6 +376,9 @@ export async function bindQuotes(
         ends_at: ctx.ends_at,
         parties: ctx.parties,
         asset: ctx.asset,
+        // Bind against the same schedule the quote was priced against. Rebuilt
+        // from the stored context, never from the agreement it came from.
+        assets: ctx.assets,
       },
       coverageKind: quote.coverage_kind,
     });
@@ -318,6 +389,7 @@ export async function bindQuotes(
         quote_id: quote.id,
         insured_signer_id: quote.beneficiary_signer_id,
         source: quote.source,
+        environment: quote.environment,
         carrier_policy_number: result.carrier_policy_number,
         status: "bound",
         effective_at: result.effective_at,
@@ -342,6 +414,7 @@ export async function bindQuotes(
     await db.from("payments").insert({
       agreement_id: quote.agreement_id,
       quote_id: quote.id,
+      environment: quote.environment,
       payer_signer_id: quote.beneficiary_signer_id,
       premium_cents: quote.premium_cents,
       platform_fee_cents: 0,
@@ -364,5 +437,10 @@ export async function bindQuotes(
     });
   }
 
-  return { policies: bound, total_premium_cents: total, collector };
+  return {
+    policies: bound,
+    total_premium_cents: total,
+    collector,
+    environment: caller.environment,
+  };
 }

@@ -74,17 +74,29 @@ export function signingInvitation(input: {
   borrowerName: string;
   lenderName: string;
   assetDescription: string;
+  /**
+   * Each item, when several are lent on one agreement. The merge value written
+   * into the document says "the 3 items listed in Schedule A below", which is
+   * correct on the document and nonsense in an email — there is no schedule
+   * below an email. So a bundle is spelled out here instead.
+   */
+  items?: string[];
   starts: string;
   ends: string;
   url: string;
   expiresHours: number;
   specimen: boolean;
 }): { subject: string; text: string } {
+  const bundled = (input.items?.length ?? 0) > 1;
+
   const lines = [
     `Hi ${input.borrowerName.split(" ")[0]},`,
     "",
-    `${input.lenderName} is lending you the ${input.assetDescription} and has sent you an agreement to sign.`,
+    bundled
+      ? `${input.lenderName} is lending you ${input.items!.length} things, and has sent you one agreement covering all of them.`
+      : `${input.lenderName} is lending you the ${input.assetDescription} and has sent you an agreement to sign.`,
     "",
+    ...(bundled ? [...input.items!.map((item) => `  - ${item}`), ""] : []),
     `From: ${input.starts}`,
     `Until: ${input.ends}`,
     "",
@@ -115,13 +127,19 @@ export function signingInvitation(input: {
 export function executedCopy(input: {
   recipientName: string;
   assetDescription: string;
+  /** Item count, when the agreement covers more than one thing. */
+  itemCount?: number;
   documentHash: string;
   specimen: boolean;
 }): { subject: string; text: string } {
+  const bundled = (input.itemCount ?? 1) > 1;
+
   const lines = [
     `Hi ${input.recipientName.split(" ")[0]},`,
     "",
-    `Everyone has now signed the agreement for the ${input.assetDescription}. Your copy is attached.`,
+    bundled
+      ? `Everyone has now signed the agreement covering all ${input.itemCount} items. Your copy is attached, with the full schedule in it.`
+      : `Everyone has now signed the agreement for the ${input.assetDescription}. Your copy is attached.`,
     "",
     "The PDF includes the full text both of you saw, both signatures, and the audit trail.",
     "",

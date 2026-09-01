@@ -20,14 +20,37 @@ export default async function LoginPage({
   const destination =
     next && next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard";
 
+  // One sign-in for everybody — a lender, somebody at a partner, and our own
+  // staff all authenticate the same way, and what they are is a row in the
+  // database rather than a different door. Only the explanation changes, because
+  // "an account is for people who lend things out" is actively confusing to
+  // somebody following the sign-in link in a partner approval email.
+  const audience = destination.startsWith("/partners")
+    ? "partner"
+    : destination.startsWith("/admin")
+      ? "staff"
+      : "lender";
+
   return (
     <Container className="py-20 sm:py-28">
       <div className="mx-auto max-w-md">
         <h1 className="font-serif text-3xl tracking-tight">Sign in</h1>
-        <p className="mt-3 text-sm leading-relaxed text-ink-soft">
-          An account is for people who lend things out. If someone has sent you
-          something to sign, use the link in your email — you do not need one of these.
-        </p>
+        {audience === "partner" ? (
+          <p className="mt-3 text-sm leading-relaxed text-ink-soft">
+            Use the email address your partner account was set up with. There is no
+            separate partner password and no invitation code — the address is the
+            invitation, so sign in with it and your access is waiting.
+          </p>
+        ) : audience === "staff" ? (
+          <p className="mt-3 text-sm leading-relaxed text-ink-soft">
+            Sign in with your work address.
+          </p>
+        ) : (
+          <p className="mt-3 text-sm leading-relaxed text-ink-soft">
+            An account is for people who lend things out. If someone has sent you
+            something to sign, use the link in your email — you do not need one of these.
+          </p>
+        )}
 
         {problems.length > 0 ? (
           <div className="mt-8 rounded-xl border border-flag/30 bg-flag/[0.06] px-5 py-4">

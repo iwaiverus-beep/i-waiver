@@ -44,7 +44,7 @@ export type SendResult = {
  *
  * Order matters and is not negotiable:
  *   1. compliance gate — a blocking failure stops everything here;
- *   2. snapshot the asset — after this the live row cannot change the document;
+ *   2. snapshot every item — after this no live row can change the document;
  *   3. render — which asserts the clause set has been reviewed;
  *   4. mint links, deliver, audit.
  *
@@ -111,28 +111,72 @@ export async function sendAgreement(
     );
   }
 
-  // 2. Snapshot the asset. Constraint 4: after this, the document does not move.
+  // 2. Snapshot every item. Constraint 4: after this, the document does not move.
+  //
+  // All of them or none of them. A bundle where the trailer froze and the jet
+  // ski did not is an agreement whose schedule half describes the past — so the
+  // whole list is gathered and validated before a single row is written.
   if (agreement.asset_id) {
-    const { data: asset } = await db
-      .from("assets")
-      .select("asset_class, description, identifier, declared_value_cents, year, make, model")
-      .eq("id", agreement.asset_id)
-      .single();
+    const { data: bundleRows, error: bundleError } = await db
+      .from("agreement_assets")
+      .select(
+        "order_index, assets(id, asset_class, description, identifier, declared_value_cents, year, make, model)",
+      )
+      .eq("agreement_id", agreementId)
+      .order("order_index");
 
-    if (!asset) throw new TransitionRefused("The asset on this agreement no longer exists.");
-    if (asset.declared_value_cents === null) {
+    if (bundleError) {
+      throw new TransitionRefused(`Could not read the items: ${bundleError.message}`);
+    }
+
+    type Item = {
+      id: string;
+      asset_class: string;
+      description: string;
+      identifier: string | null;
+      declared_value_cents: number | null;
+      year: number | null;
+      make: string | null;
+      model: string | null;
+    };
+
+    const items = (bundleRows ?? [])
+      .map((row) => {
+        const embedded = row.assets as unknown as Item | Item[] | null;
+        return Array.isArray(embedded) ? (embedded[0] ?? null) : embedded;
+      })
+      .filter((item): item is Item => item !== null);
+
+    if (items.length === 0) {
+      throw new TransitionRefused("The items on this agreement no longer exist.");
+    }
+
+    const unvalued = items.filter((item) => item.declared_value_cents === null);
+    if (unvalued.length > 0) {
       throw new TransitionRefused(
-        "Give the asset a declared value first — the damage clause and the cover both need it.",
+        unvalued.length === items.length && items.length === 1
+          ? "Give the asset a declared value first — the damage clause and the cover both need it."
+          : `Give ${unvalued.map((i) => i.description).join(" and ")} a declared value first — the damage clause and the cover both need one for every item.`,
       );
     }
 
+    // `id` is dropped: a snapshot describes the thing, and keeping a live row id
+    // inside it invites exactly the reference-instead-of-snapshot read that
+    // constraint 4 exists to prevent.
+    const snapshots = items.map(({ id: _id, ...facts }) => facts);
+
     const { error } = await db
       .from("agreements")
-      .update({ asset_snapshot: asset })
+      .update({
+        // The lead item stays in `asset_snapshot` so that everything written
+        // against it before bundles existed keeps working unchanged.
+        asset_snapshot: snapshots[0],
+        asset_snapshots: snapshots,
+      })
       .eq("id", agreementId)
       .eq("status", "draft");
 
-    if (error) throw new TransitionRefused(`Could not snapshot the asset: ${error.message}`);
+    if (error) throw new TransitionRefused(`Could not snapshot the items: ${error.message}`);
   }
 
   // 3. Render. Raises if any clause in the set is unpublished.
@@ -155,6 +199,7 @@ export async function sendAgreement(
       document_hash: document.documentHash,
       template_version_id: document.agreement.template_version_id,
       specimen: document.specimen,
+      item_count: document.assets.length,
     },
     context,
   });
@@ -179,6 +224,19 @@ export async function sendAgreement(
         borrowerName: signer.display_name,
         lenderName: lender.display_name,
         assetDescription: document.mergeValues.asset_description,
+        // Spelled out for a bundle: an email has no Schedule A below it.
+        items:
+          document.assets.length > 1
+            ? document.assets.map((item) =>
+                [
+                  [item.year, item.make, item.model].filter(Boolean).join(" ") ||
+                    item.description,
+                  item.identifier,
+                ]
+                  .filter(Boolean)
+                  .join(" - "),
+              )
+            : undefined,
         starts: document.mergeValues.starts_at,
         ends: document.mergeValues.ends_at,
         url,
@@ -417,6 +475,7 @@ export async function executeAgreement(
     const message = executedCopy({
       recipientName: signer.display_name,
       assetDescription: document.mergeValues.asset_description,
+      itemCount: document.assets.length,
       documentHash: sha256,
       specimen: document.specimen,
     });

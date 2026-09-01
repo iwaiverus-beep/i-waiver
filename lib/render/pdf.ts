@@ -309,14 +309,56 @@ export async function renderAgreementPdf(input: {
   L.gap(6);
   L.keyValue("Lender", nameFor(doc, "lender"));
   L.keyValue("Borrower", nameFor(doc, "borrower"));
-  L.keyValue("Asset", doc.mergeValues.asset_description);
-  if (doc.asset.identifier) L.keyValue("HIN / VIN / serial", doc.asset.identifier);
-  L.keyValue("Declared value", formatCents(doc.asset.declared_value_cents));
+  const bundled = doc.assets.length > 1;
+
+  if (bundled) {
+    L.keyValue("Items", `${doc.assets.length}, listed in Schedule A below`);
+  } else {
+    L.keyValue("Asset", doc.mergeValues.asset_description);
+    if (doc.asset.identifier) L.keyValue("HIN / VIN / serial", doc.asset.identifier);
+  }
+  L.keyValue("Declared value", formatCents(doc.totalDeclaredValueCents));
   L.keyValue("From", doc.mergeValues.starts_at);
   L.keyValue("Until", doc.mergeValues.ends_at);
   L.keyValue("State of activity", doc.agreement.jurisdiction);
   L.gap(10);
   L.rule();
+
+  // ---- Schedule A ---------------------------------------------------------
+  // Before the clauses, not appended after them. The clauses refer to "the items
+  // listed in Schedule A", and a schedule a reader has to hunt for at the back
+  // of the document after being told to rely on it is a schedule that gets
+  // skipped — which is an argument about whether they knew what they signed for.
+  if (bundled) {
+    L.need(80);
+    L.text("Schedule A — items lent", { font: fonts.bold, size: 12 });
+    L.gap(6);
+
+    doc.assets.forEach((item, index) => {
+      L.need(34);
+      const named = [item.year?.toString(), item.make, item.model]
+        .filter(Boolean)
+        .join(" ");
+      L.text(`${index + 1}. ${named || item.description}`, {
+        font: fonts.bold,
+        size: 10.5,
+      });
+      const detail = [
+        named ? item.description : null,
+        item.identifier ? `HIN / VIN / serial ${item.identifier}` : null,
+        `declared value ${formatCents(item.declared_value_cents)}`,
+      ]
+        .filter(Boolean)
+        .join(" · ");
+      L.text(detail, { size: 10, color: SOFT });
+      L.gap(4);
+    });
+
+    L.gap(2);
+    L.keyValue("Total declared value", formatCents(doc.totalDeclaredValueCents));
+    L.gap(10);
+    L.rule();
+  }
 
   // ---- Clauses ------------------------------------------------------------
   for (const clause of doc.clauses) {

@@ -65,6 +65,29 @@ export function coverageInternalKey(): string {
     .digest("hex");
 }
 
+/**
+ * The addresses that may grant themselves staff access on first sign-in.
+ *
+ * Comma-separated, lower-cased. Read the long note in lib/platform/access.ts
+ * before adding one: this is the only way into an empty admin console, and an
+ * address left in it cannot be revoked from inside the product. Empty it once
+ * real `platform_staff` rows exist.
+ */
+export function bootstrapAdminEmails(): string[] {
+  return (optional("IWAIVER_BOOTSTRAP_ADMINS") ?? "")
+    .split(",")
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+/** Where a new partner application is announced internally. */
+export const partnerNotificationEmail = () =>
+  optional("PARTNER_NOTIFICATIONS_EMAIL");
+
+/** The address a partner or a lender is told to write to. */
+export const supportEmail = () =>
+  optional("SUPPORT_EMAIL") ?? `support@${BRAND.domain}`;
+
 export const resendApiKey = () => optional("RESEND_API_KEY");
 /**
  * The From line a borrower sees.

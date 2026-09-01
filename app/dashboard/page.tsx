@@ -25,7 +25,7 @@ export default async function DashboardPage() {
   const { data: agreements } = await supabase
     .from("agreements")
     .select(
-      "id, status, jurisdiction, activity_class, starts_at, ends_at, created_at, executed_at, signers(role, display_name, signed_at)",
+      "id, status, jurisdiction, activity_class, starts_at, ends_at, created_at, executed_at, signers(role, display_name, signed_at), agreement_assets(count)",
     )
     .order("created_at", { ascending: false })
     .limit(100);
@@ -39,21 +39,15 @@ export default async function DashboardPage() {
   return (
     <Container className="py-14 sm:py-20">
       <AppNav />
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-serif text-3xl tracking-tight">Your agreements</h1>
-          <p className="mt-2 text-sm text-ink-soft">
-            {rows.length === 0
-              ? "Nothing here yet."
-              : `${rows.length} total · ${drafts} draft · ${awaiting} waiting on a signature`}
-          </p>
-        </div>
-        <Link
-          href="/agreements/new"
-          className="inline-flex items-center rounded-full bg-accent px-5 py-2.5 text-sm font-semibold text-paper transition-colors hover:bg-accent-hover"
-        >
-          Lend something
-        </Link>
+      {/* No action button here: "Lend something" leads AppNav, so it sits in the
+          same place on every lender screen rather than moving around. */}
+      <div>
+        <h1 className="font-serif text-3xl tracking-tight">Your agreements</h1>
+        <p className="mt-2 text-sm text-ink-soft">
+          {rows.length === 0
+            ? "Nothing here yet."
+            : `${rows.length} total · ${drafts} draft · ${awaiting} waiting on a signature`}
+        </p>
       </div>
 
       <div className="mt-10 space-y-3">
@@ -69,6 +63,10 @@ export default async function DashboardPage() {
           const signers = (agreement.signers ?? []) as SignerRow[];
           const borrower = signers.find((s) => s.role === "borrower");
           const outstanding = signers.filter((s) => !s.signed_at);
+          // PostgREST returns an aggregate embed as a one-element array.
+          const itemCount =
+            (agreement.agreement_assets as unknown as { count: number }[] | null)?.[0]
+              ?.count ?? 1;
 
           return (
             <Link
@@ -82,8 +80,10 @@ export default async function DashboardPage() {
                     {borrower?.display_name ?? "No borrower yet"}
                   </p>
                   <p className="mt-1 text-sm text-ink-soft">
-                    {agreement.activity_class.replace(/_/g, " ")} in{" "}
-                    {agreement.jurisdiction} ·{" "}
+                    {itemCount > 1
+                      ? `${itemCount} items`
+                      : agreement.activity_class.replace(/_/g, " ")}{" "}
+                    in {agreement.jurisdiction} ·{" "}
                     {formatDate(agreement.starts_at)} to {formatDate(agreement.ends_at)}
                   </p>
                   {outstanding.length > 0 && agreement.status !== "draft" && (

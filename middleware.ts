@@ -46,7 +46,15 @@ export async function middleware(request: NextRequest) {
     path.startsWith("/agreements") ||
     path.startsWith("/assets") ||
     path.startsWith("/contacts") ||
-    path.startsWith("/account");
+    path.startsWith("/account") ||
+    // Signed-in areas that are not the lender's. Being signed in is all this
+    // checks; whether the account is a partner member or staff is decided by
+    // lib/partners/access.ts and lib/platform/access.ts, on the service client,
+    // where the answer can be trusted. Note what is NOT matched: /partners and
+    // /partners/docs are the public pitch and the integration reference, and both
+    // have to be readable by somebody deciding whether to apply.
+    path.startsWith("/partners/console") ||
+    path.startsWith("/admin");
 
   if (isLenderArea && !user) {
     const login = request.nextUrl.clone();
@@ -56,10 +64,16 @@ export async function middleware(request: NextRequest) {
   }
 
   if (path === "/login" && user) {
-    const dashboard = request.nextUrl.clone();
-    dashboard.pathname = "/dashboard";
-    dashboard.search = "";
-    return NextResponse.redirect(dashboard);
+    // Honour ?next= for somebody who is already signed in. Without this, a
+    // partner following the sign-in link in their approval email lands on the
+    // lender dashboard, which is not theirs and does not explain itself. Only
+    // relative paths, so a crafted value cannot bounce a live session off-site.
+    const next = request.nextUrl.searchParams.get("next");
+    const destination = request.nextUrl.clone();
+    destination.pathname =
+      next && next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard";
+    destination.search = "";
+    return NextResponse.redirect(destination);
   }
 
   return response;
@@ -72,6 +86,8 @@ export const config = {
     "/assets/:path*",
     "/contacts/:path*",
     "/account/:path*",
+    "/partners/console/:path*",
+    "/admin/:path*",
     "/login",
   ],
 };

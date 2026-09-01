@@ -62,8 +62,11 @@ export default async function SignPage({
           For {session.displayName}
         </p>
         <h1 className="mt-3 font-serif text-3xl leading-tight tracking-tight sm:text-4xl">
-          {other?.display_name ?? "Someone"} is lending you the{" "}
-          {document.asset.description}.
+          {other?.display_name ?? "Someone"} is lending you{" "}
+          {document.assets.length > 1
+            ? `${document.assets.length} things`
+            : `the ${document.asset.description}`}
+          .
         </h1>
         <p className="mt-4 text-base leading-relaxed text-ink-soft">
           Read it, then sign at the bottom. You do not need an account, and you will not
@@ -88,12 +91,58 @@ export default async function SignPage({
         </div>
 
         <dl className="mt-8 rounded-2xl border border-line bg-surface px-6 py-5">
-          <Fact label="What" value={document.mergeValues.asset_description} />
-          <Fact label="Worth" value={formatCents(document.asset.declared_value_cents)} />
+          <Fact
+            label="What"
+            value={
+              document.assets.length > 1
+                ? `${document.assets.length} items — listed below`
+                : document.mergeValues.asset_description
+            }
+          />
+          <Fact label="Worth" value={formatCents(document.totalDeclaredValueCents)} />
           <Fact label="From" value={document.mergeValues.starts_at} />
           <Fact label="Until" value={document.mergeValues.ends_at} />
           <Fact label="Where" value={document.agreement.jurisdiction} />
         </dl>
+
+        {/* Above the clauses, not below them. The release the borrower is about
+            to sign says "the items listed in Schedule A" — if the schedule sits
+            after the clause that relies on it, the document tells them to read
+            something they have already scrolled past. */}
+        {document.assets.length > 1 && (
+          <section className="mt-8 rounded-2xl border border-line px-6 py-5">
+            <h2 className="font-serif text-lg tracking-tight">
+              Schedule A — what you are borrowing
+            </h2>
+            <ol className="mt-4 divide-y divide-line">
+              {document.assets.map((item, index) => (
+                <li
+                  key={`${item.description}-${index}`}
+                  className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-3 first:pt-0 last:pb-0"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-ink">
+                      {index + 1}.{" "}
+                      {[item.year, item.make, item.model]
+                        .filter(Boolean)
+                        .join(" ") || item.description}
+                    </p>
+                    <p className="text-sm text-ink-soft">
+                      {item.description}
+                      {item.identifier ? ` · ${item.identifier}` : ""}
+                    </p>
+                  </div>
+                  <p className="text-sm tabular-nums text-ink-soft">
+                    {formatCents(item.declared_value_cents)}
+                  </p>
+                </li>
+              ))}
+            </ol>
+            <p className="mt-4 text-sm text-ink-soft">
+              One signature covers all {document.assets.length}.
+            </p>
+          </section>
+        )}
 
         <div className="mt-12 space-y-10">
           {document.clauses.map((clause) => (

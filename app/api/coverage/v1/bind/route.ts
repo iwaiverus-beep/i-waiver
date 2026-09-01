@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveCaller } from "@/lib/coverage/auth";
 import { bindQuotes, CoverageRejection } from "@/lib/coverage/service";
+import { notePartnerApiCall } from "@/lib/partners/activity";
 import type { BindRequest } from "@/lib/coverage/contract";
 
 export const runtime = "nodejs";
@@ -27,7 +28,9 @@ export async function POST(request: Request) {
   }
 
   try {
-    return NextResponse.json(await bindQuotes(body, caller));
+    const response = await bindQuotes(body, caller);
+    await notePartnerApiCall(caller, "bind");
+    return NextResponse.json(response);
   } catch (error) {
     if (error instanceof CoverageRejection) {
       return NextResponse.json(

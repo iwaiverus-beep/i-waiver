@@ -32,6 +32,11 @@ export async function PATCH(
     if (body.phone !== undefined) patch.phone = text(body.phone, 40);
     if (body.notes !== undefined) patch.notes = text(body.notes, 500);
 
+    // Not a field anyone edits — the form sends it when an agreement was just
+    // created from this person, so the picker can float the handful of people
+    // actually lent to above the ones saved and forgotten.
+    if (body.touched === true) patch.last_used_at = new Date().toISOString();
+
     if (Object.keys(patch).length === 0) {
       return NextResponse.json({ error: "Nothing to change." }, { status: 400 });
     }
@@ -43,10 +48,20 @@ export async function PATCH(
       .from("contacts")
       .update(patch)
       .eq("id", id)
-      .select("id, display_name, email, phone, notes")
+      .select("id, display_name, email, phone, notes, source, last_used_at")
       .maybeSingle();
 
-    if (error) throw new Error(error.message);
+    if (error) {
+      // 23505 is the one-entry-per-address index. Editing someone onto an address
+      // another entry already holds is a duplicate to resolve, not a server fault.
+      if (error.code === "23505") {
+        return NextResponse.json(
+          { error: "Someone else in your list already has that email." },
+          { status: 409 },
+        );
+      }
+      throw new Error(error.message);
+    }
     if (!data) return NextResponse.json({ error: "Not found." }, { status: 404 });
 
     return NextResponse.json({ contact: data });

@@ -83,7 +83,25 @@ export class MockCarrier implements CarrierClient {
   }): Promise<CarrierQuote[]> {
     const { context } = input;
     const days = loanDays(context.starts_at, context.ends_at);
-    const declared = context.asset?.declared_value_cents ?? 0;
+
+    // `assets` when the caller sent a bundle, otherwise the single `asset`. A
+    // caller that sends both must be sending the same thing twice, so the list
+    // wins — it is the one that can be complete.
+    const items = context.assets?.length
+      ? context.assets
+      : context.asset
+        ? [context.asset]
+        : [];
+
+    // Physical damage on a bundle is rated against the combined value, which is
+    // the exposure: a trailer that jack-knifes takes the ski on it with it. A
+    // real rate plan would apply a schedule discount here; the mock deliberately
+    // does not pretend to know what it would be.
+    const declared = items.reduce(
+      (sum, item) => sum + (item.declared_value_cents ?? 0),
+      0,
+    );
+    const bundled = items.length > 1;
 
     const quotes: CarrierQuote[] = [];
 
@@ -96,7 +114,10 @@ export class MockCarrier implements CarrierClient {
         activity_class: context.activity_class,
         jurisdiction: context.jurisdiction,
         beneficiary_external_ref: input.beneficiaryRef,
-        asset_class: context.asset?.asset_class ?? null,
+        asset_class: items[0]?.asset_class ?? null,
+        // Only on the branch that could not have existed before, so that a
+        // single-asset loan reproduces the quote ref it always did.
+        ...(bundled ? { item_count: items.length } : {}),
       };
 
       if (kind === "physical_damage") {
@@ -111,7 +132,9 @@ export class MockCarrier implements CarrierClient {
           rating_inputs: { ...ratingInputs, factor: 0.004, deductible_cents: 25_000 },
           carrier_quote_ref: this.ref("PDQ", ratingInputs),
           expires_at: new Date(Date.now() + 24 * 3_600_000).toISOString(),
-          summary: `Damage to the watercraft up to its declared value, $250 excess, for the ${days === 1 ? "day" : `${days} days`} of the loan.`,
+          summary: bundled
+            ? `Damage to any of the ${items.length} items up to their combined declared value, $250 excess, for the ${days === 1 ? "day" : `${days} days`} of the loan.`
+            : `Damage to the watercraft up to its declared value, $250 excess, for the ${days === 1 ? "day" : `${days} days`} of the loan.`,
         });
       }
 

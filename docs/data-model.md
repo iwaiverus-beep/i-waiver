@@ -118,7 +118,7 @@ rental slot), so keep `asset_class` open and allow a null identifier.
 | column | notes |
 |---|---|
 | `id` | uuid |
-| `owner_user_id` | FK users |
+| `owner_originator_id` | FK originators — a person **or** an organisation, same as `agreements.originator_id`. A shop's fleet belongs to the shop, not to the member of staff who entered it. |
 | `asset_class` | enum: `pwc`, `boat`, `trailer`, `vehicle`, `equipment`, `other` |
 | `description` | "2023 Sea-Doo GTI 130" |
 | `identifier` | HIN / VIN / serial — matters for the carrier |
@@ -144,6 +144,44 @@ The spine. One row per loan.
 
 Snapshot the asset values onto the agreement at send time (`asset_snapshot jsonb`).
 If Dave edits the declared value in September, the June agreement must not change.
+
+### Bundles — several things on one agreement
+
+Lending a jet ski usually means lending the ski, the trailer and two life
+jackets, to one person, for one afternoon. That is a single bailment of several
+chattels, and the ordinary instrument for it is one release with a schedule
+attached — not three releases.
+
+`agreement_assets (agreement_id, asset_id, order_index)` is the draft's working
+list. A join table rather than a `uuid[]` column because `assets` is referenced
+`on delete restrict` so a lender cannot delete their way out of a signed record,
+and Postgres cannot enforce a foreign key through an array element — an array
+would silently drop that protection for every item after the first.
+
+`agreements.asset_snapshots jsonb` is the ordered snapshot of every item, frozen
+at send. Rule 4 applies item by item: after sending, the document is assembled
+from the snapshots and the join table is never read for rendering again.
+
+Three things stay exactly as they were, and each is load-bearing:
+
+- `agreements.asset_id` is the **lead item** of the bundle. Every query, policy
+  and constraint written against it keeps working.
+- `agreements.asset_snapshot` is the **lead item's** snapshot.
+- `asset_snapshots` is null on any agreement created before bundles existed,
+  which the renderer reads as a bundle of one.
+
+So a single-item agreement is byte-for-byte the record it was, and — the point
+of the whole arrangement — it canonicalises to the same text and therefore the
+same hash. `IWAIVER-AGREEMENT-V1` has a singular `ASSET` block and is frozen:
+those exact bytes are what `documents.sha256` and every
+`signatures.document_hash_at_signing` were computed from. `V2` replaces that
+block with `SCHEDULE A` and is emitted only where there is more than one item —
+a document V1 could never have produced, so nothing already signed is reachable
+from it.
+
+On the coverage side, `coverage_contexts.assets jsonb` mirrors this: `asset`
+keeps its meaning as the single or lead item so an existing partner integration
+needs no change, and `assets` carries the full schedule when there is one.
 
 ### `signers`
 **The important one.** Independent of `users`.
@@ -196,6 +234,7 @@ exactly what wording a signer saw.
 | `version` | int, monotonic |
 | `jurisdiction` | state code, or `US` for the base |
 | `activity_class` | |
+| `originator_kind` | `individual` \| `organization` — a private loan and a commercial rental are different instruments, not the same one with a different name in the blank. Selection is exact on all three axes; there is **no** fallback from `organization` to `individual`. |
 | `clause_set` | jsonb — ordered clause version ids |
 | `published_at` | null = draft |
 | `superseded_at` | |
@@ -483,10 +522,37 @@ data they already hold. Everything else is collected in your own surface.
 |---|---|
 | `partner_id` | |
 | `integration_kind` | `widget`, `api`, `redirect` |
-| `api_key_hash`, `key_rotated_at` | |
-| `allowed_jurisdictions` | |
+| `environment` | `sandbox` \| `live`. Sandbox by default; going live is a decision |
+| `api_key_hash`, `key_prefix`, `key_rotated_at` | prefix is display only |
+| `allowed_jurisdictions` | at least one — the database refuses an empty list |
+| `allowed_origins` | where a widget may be framed from |
 | `compensation_model` | `flat_referral`, `platform_fee`, `none` — **not** premium-based |
-| `webhook_url`, `webhook_secret_hash` | |
+| `webhook_url`, `webhook_secret_hash` | secret rotates whenever the URL changes |
+| `revoked_at`, `revoked_by`, `last_used_at` | rotation is create-then-revoke |
+
+**Added since the first draft** (migrations `20260901000012`–`15`), because the tables
+above described a partner nobody could become:
+
+- `partner_applications` — the public request. Marketing-adjacent, outside the
+  agreement graph exactly as `waitlist` is.
+- `partner_members` — who at that company may sign in. The invitation is the email
+  address; there is no token. Grants access to that company's integration settings
+  and to nothing in the agreement graph.
+- `partner_onboarding` — completed steps only. The step list is code, not data.
+- `partner_branding` — co-branding for the widget, reviewed before it renders.
+- `platform_staff` / `staff_actions` — our own people, and an append-only record of
+  what they did.
+- `support_tickets` / `support_messages` — append-only threads, with internal notes
+  the customer reader cannot return.
+
+`environment` also lives on `coverage_contexts`, `quotes`, `policies` and `payments`
+(`20260901000013`), and `public.purge_sandbox_coverage` empties the sandbox with every
+statement filtered on it. See `docs/partners.md` for the operating model.
+
+Empty `allowed_jurisdictions` means "no restriction" to `lib/coverage/service.ts` —
+a reasonable reading when partners were created by hand, and a bad one now that an
+approval flow creates them. Rather than reinterpret the coverage service's semantics
+from outside it, the check constraint makes an empty list unstorable.
 
 ### Why a widget, not only an API
 

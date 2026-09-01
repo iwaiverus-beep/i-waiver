@@ -20,6 +20,7 @@ export function Footer() {
               { href: "/how-it-works", label: "How it works" },
               { href: "/individuals", label: "For individuals" },
               { href: "/businesses", label: "For businesses" },
+              { href: "/partners", label: "For partners" },
             ]}
           />
           <FooterCol

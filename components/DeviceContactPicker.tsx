@@ -17,11 +17,17 @@ import { useEffect, useState } from "react";
  * real typing, and where it does not the form underneath is untouched and the
  * button simply is not there. It is never the only way to fill the fields.
  *
- * The user still picks the contact in the platform's own sheet. The page cannot
- * enumerate the address book, and nothing is read until they choose someone.
+ * There is no way to add searching to it, and none is wanted. The picker that
+ * opens is the platform's own contact sheet, with the platform's own search in
+ * it. The page cannot enumerate the address book, cannot filter it, and reads
+ * nothing at all until the user has chosen someone in a UI we do not draw.
  */
 
-type PickedContact = { name: string; email: string | null; phone: string | null };
+export type PickedContact = {
+  name: string;
+  email: string | null;
+  phone: string | null;
+};
 
 type ContactsManager = {
   select: (
@@ -33,8 +39,13 @@ type ContactsManager = {
 
 export function DeviceContactPicker({
   onPick,
+  multiple = false,
+  label,
 }: {
+  /** Called once per chosen contact, in the order the platform returned them. */
   onPick: (contact: PickedContact) => void;
+  multiple?: boolean;
+  label?: string;
 }) {
   const [supported, setSupported] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -60,15 +71,16 @@ export function DeviceContactPicker({
       const available = await manager.getProperties();
       const wanted = ["name", "email", "tel"].filter((p) => available.includes(p));
 
-      const picked = await manager.select(wanted, { multiple: false });
+      const picked = await manager.select(wanted, { multiple });
       if (!picked || picked.length === 0) return; // they cancelled
 
-      const entry = picked[0];
-      onPick({
-        name: entry.name?.[0]?.trim() || "",
-        email: entry.email?.[0]?.trim() || null,
-        phone: entry.tel?.[0]?.trim() || null,
-      });
+      for (const entry of picked) {
+        onPick({
+          name: entry.name?.[0]?.trim() || "",
+          email: entry.email?.[0]?.trim() || null,
+          phone: entry.tel?.[0]?.trim() || null,
+        });
+      }
     } catch (caught) {
       const message = (caught as Error).message ?? "";
       setError(
@@ -92,7 +104,7 @@ export function DeviceContactPicker({
         className="inline-flex items-center gap-2 rounded-full border border-line bg-paper px-4 py-2 text-sm font-semibold text-ink transition-colors hover:border-ink/40 disabled:opacity-50"
       >
         <BookMark />
-        {busy ? "Opening…" : "Choose from contacts"}
+        {busy ? "Opening…" : (label ?? "Choose from contacts")}
       </button>
       {error && <p className="mt-2 text-xs text-flag">{error}</p>}
     </div>

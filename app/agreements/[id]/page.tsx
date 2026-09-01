@@ -73,6 +73,10 @@ export default async function AgreementPage({
   const lender = (signers ?? []).find((s) => s.role === "lender");
   const borrower = (signers ?? []).find((s) => s.role === "borrower");
 
+  // False when the render failed, which is right: with no assembled document
+  // there is no schedule to show, and the refusal above is the useful thing.
+  const bundled = (document?.assets.length ?? 0) > 1;
+
   // What the agreements app knows about cover comes from its own audit trail, not
   // from reading the coverage service's tables. That boundary is the whole point of
   // constraint 9, and a "just this once" join here would quietly undo it.
@@ -158,25 +162,64 @@ export default async function AgreementPage({
               <Row label="Lender" value={`${lender?.display_name ?? "—"} · ${lender?.email ?? ""}`} />
               <Row label="Borrower" value={`${borrower?.display_name ?? "—"} · ${borrower?.email ?? ""}`} />
               <Row
-                label="Asset"
-                value={document?.mergeValues.asset_description ?? "—"}
+                label={bundled ? "Items" : "Asset"}
+                value={
+                  bundled
+                    ? `${document!.assets.length}, listed below`
+                    : (document?.mergeValues.asset_description ?? "—")
+                }
               />
               <Row
-                label="Declared value"
-                value={formatCents(document?.asset.declared_value_cents)}
+                label={bundled ? "Total declared value" : "Declared value"}
+                value={formatCents(document?.totalDeclaredValueCents)}
               />
               <Row label="From" value={document?.mergeValues.starts_at ?? "—"} />
               <Row label="Until" value={document?.mergeValues.ends_at ?? "—"} />
               <Row
-                label="Asset details"
+                label={bundled ? "Item details" : "Asset details"}
                 value={
                   agreement.asset_snapshot
                     ? "Frozen onto this agreement when it was sent"
-                    : "Still reading the live asset — frozen when you send"
+                    : "Still reading the live list — frozen when you send"
                 }
               />
             </dl>
           </Panel>
+
+          {/* The schedule, only where there is one. A single-item agreement
+              already said everything in the panel above, and repeating it as a
+              one-row table would be furniture. */}
+          {bundled && (
+            <Panel
+              title="Schedule A — items lent"
+              description="These go on one waiver, signed once. The numbering is what appears on the document."
+            >
+              <ol className="divide-y divide-line">
+                {document!.assets.map((item, index) => (
+                  <li
+                    key={`${item.description}-${index}`}
+                    className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-3 first:pt-0 last:pb-0"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-ink">
+                        {index + 1}.{" "}
+                        {[item.year, item.make, item.model]
+                          .filter(Boolean)
+                          .join(" ") || item.description}
+                      </p>
+                      <p className="text-sm text-ink-soft">
+                        {item.description}
+                        {item.identifier ? ` · ${item.identifier}` : ""}
+                      </p>
+                    </div>
+                    <p className="text-sm tabular-nums text-ink-soft">
+                      {formatCents(item.declared_value_cents)}
+                    </p>
+                  </li>
+                ))}
+              </ol>
+            </Panel>
+          )}
 
           {document && (
             <Panel

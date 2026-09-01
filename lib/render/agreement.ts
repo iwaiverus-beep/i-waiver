@@ -64,13 +64,26 @@ export type AgreementFacts = {
   executed_at: string | null;
   template_version_id: string;
   asset_snapshot: AssetFacts | null;
+  asset_snapshots: AssetFacts[] | null;
   asset_id: string | null;
 };
 
 export type AssembledDocument = {
   agreement: AgreementFacts;
   signers: SignerFacts[];
+  /** Every item on the agreement, in schedule order. Never empty. */
+  assets: AssetFacts[];
+  /**
+   * The lead item — `assets[0]`.
+   *
+   * Kept because a great deal of this application legitimately wants one thing
+   * to name, and because removing it would have rewritten call sites that are
+   * correct as they stand. Read `assets` wherever the answer should cover the
+   * whole bundle, and `totalDeclaredValueCents` wherever money is involved.
+   */
   asset: AssetFacts;
+  /** Sum across the bundle. Equals the lead item's value when there is one item. */
+  totalDeclaredValueCents: number | null;
   clauses: RenderedClause[];
   mergeValues: Record<string, string>;
   templateLabel: string;
@@ -108,8 +121,17 @@ function merge(body: string, values: Record<string, string>): string {
 }
 
 function assetFromSnapshot(raw: unknown): AssetFacts | null {
-  if (!raw || typeof raw !== "object") return null;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   return raw as AssetFacts;
+}
+
+function assetsFromSnapshots(raw: unknown): AssetFacts[] | null {
+  if (!Array.isArray(raw) || raw.length === 0) return null;
+  const items = raw.filter(
+    (entry): entry is AssetFacts =>
+      Boolean(entry) && typeof entry === "object" && !Array.isArray(entry),
+  );
+  return items.length > 0 ? items : null;
 }
 
 function describeAsset(asset: AssetFacts): string {
@@ -117,6 +139,50 @@ function describeAsset(asset: AssetFacts): string {
     .filter(Boolean)
     .join(" ");
   return bits ? `${bits} — ${asset.description}` : asset.description;
+}
+
+/**
+ * What `{{asset_description}}` becomes.
+ *
+ * A single item keeps reading exactly as it always has — the clause wording that
+ * counsel will review says "the {{asset_description}}", and for one jet ski that
+ * has to remain a jet ski, not "the 1 item listed below".
+ *
+ * A bundle points at the schedule instead of trying to inline three descriptions
+ * into the middle of a sentence. A release that reads "you assume all risk of
+ * using the 2021 Yamaha VX Cruiser — Yamaha WaveRunner and the 2019 Load Rite
+ * trailer — trailer and the kayak, red, 10ft" is one nobody finishes reading,
+ * and unreadable is a real defence against enforcement.
+ */
+function describeBundle(assets: AssetFacts[]): string {
+  if (assets.length === 1) return describeAsset(assets[0]);
+  return `${assets.length} items listed in Schedule A below`;
+}
+
+/**
+ * The bundle's total declared value.
+ *
+ * Null only if nothing in the bundle has a value at all, which is a draft that
+ * `sendAgreement` refuses. A partially valued bundle sums what it knows rather
+ * than collapsing to null: showing a lender "—" because one of four items is
+ * blank tells them less than showing the figure and the gap.
+ */
+function totalDeclaredCents(assets: AssetFacts[]): number | null {
+  const known = assets
+    .map((asset) => asset.declared_value_cents)
+    .filter((cents): cents is number => typeof cents === "number");
+  if (known.length === 0) return null;
+  return known.reduce((sum, cents) => sum + cents, 0);
+}
+
+/** One line per item, as it appears in Schedule A and in the canonical text. */
+function scheduleLines(assets: AssetFacts[]): string[] {
+  return assets.flatMap((asset, index) => [
+    `${index + 1}. ${describeAsset(asset)}`,
+    `   class: ${asset.asset_class}`,
+    `   identifier: ${asset.identifier ?? ""}`,
+    `   declared_value_cents: ${asset.declared_value_cents ?? ""}`,
+  ]);
 }
 
 /**
@@ -132,7 +198,7 @@ export async function assembleAgreement(
   const { data: agreement, error: agreementError } = await db
     .from("agreements")
     .select(
-      "id, jurisdiction, activity_class, starts_at, ends_at, status, cover_requested, executed_at, template_version_id, asset_snapshot, asset_id",
+      "id, jurisdiction, activity_class, starts_at, ends_at, status, cover_requested, executed_at, template_version_id, asset_snapshot, asset_snapshots, asset_id",
     )
     .eq("id", agreementId)
     .single();
@@ -160,23 +226,64 @@ export async function assembleAgreement(
     );
   }
 
-  // Snapshot first, live row only while still a draft. Once sent, the snapshot is
-  // the only truth about the asset.
-  let asset = assetFromSnapshot(agreement.asset_snapshot);
-  if (!asset && agreement.asset_id) {
+  // Snapshots first, live rows only while still a draft. Once sent, the frozen
+  // copy is the only truth about what was lent.
+  //
+  // Three sources in strict order of authority, and the order is the whole point:
+  //
+  //   1. `asset_snapshots` — a bundle frozen at send;
+  //   2. `asset_snapshot`  — an agreement sent before bundles existed, which is
+  //      a bundle of one and must keep rendering exactly as it did then;
+  //   3. the live `agreement_assets` rows — a draft, which is allowed to move
+  //      because nobody has signed anything yet.
+  let assets =
+    assetsFromSnapshots(agreement.asset_snapshots) ??
+    (assetFromSnapshot(agreement.asset_snapshot)
+      ? [assetFromSnapshot(agreement.asset_snapshot) as AssetFacts]
+      : null);
+
+  if (!assets) {
     const { data: live } = await db
+      .from("agreement_assets")
+      .select(
+        "order_index, assets(asset_class, description, identifier, declared_value_cents, year, make, model)",
+      )
+      .eq("agreement_id", agreementId)
+      .order("order_index");
+
+    const rows = (live ?? [])
+      .map((row) => {
+        // PostgREST returns an embedded to-one as an object, but types it as a
+        // union with an array. Normalised rather than cast blindly.
+        const embedded = row.assets as unknown as AssetFacts | AssetFacts[] | null;
+        return Array.isArray(embedded) ? (embedded[0] ?? null) : embedded;
+      })
+      .filter((entry): entry is AssetFacts => entry !== null);
+
+    if (rows.length > 0) assets = rows;
+  }
+
+  // Last resort: an agreement whose lead asset never made it into the join
+  // table. Should not happen after the backfill, and is cheap insurance against
+  // a render that fails for a reason nobody can see from the outside.
+  if (!assets && agreement.asset_id) {
+    const { data: lead } = await db
       .from("assets")
       .select(
         "asset_class, description, identifier, declared_value_cents, year, make, model",
       )
       .eq("id", agreement.asset_id)
       .single();
-    asset = (live as AssetFacts | null) ?? null;
+    if (lead) assets = [lead as AssetFacts];
   }
 
-  if (!asset) {
+  if (!assets || assets.length === 0) {
     throw new RenderError("agreement has no asset to describe");
   }
+
+  const asset = assets[0];
+  const bundled = assets.length > 1;
+  const totalDeclaredValueCents = totalDeclaredCents(assets);
 
   const { data: availability } = await db
     .from("state_availability")
@@ -206,17 +313,33 @@ export async function assembleAgreement(
     );
   }
 
+  // A single-item agreement produces EXACTLY the set of merge values it produced
+  // before bundles existed — same keys, same strings. The canonical text lists
+  // every merge value, so adding a key unconditionally would change the hash of
+  // documents that are already signed. `item_count` is therefore added only on
+  // the branch that could not have existed before.
   const mergeValues: Record<string, string> = {
     lender_name: lender.display_name,
     borrower_name: borrower.display_name,
-    asset_description: describeAsset(asset),
-    asset_identifier: asset.identifier ?? "not recorded",
-    declared_value: formatCents(asset.declared_value_cents),
+    asset_description: describeBundle(assets),
+    asset_identifier: bundled
+      ? "listed in Schedule A"
+      : (asset.identifier ?? "not recorded"),
+    declared_value: formatCents(
+      bundled ? totalDeclaredValueCents : asset.declared_value_cents,
+    ),
     starts_at: formatInstant(agreement.starts_at, agreement.jurisdiction),
     ends_at: formatInstant(agreement.ends_at, agreement.jurisdiction),
     jurisdiction: agreement.jurisdiction,
     activity_class: agreement.activity_class.replace(/_/g, " "),
   };
+
+  if (bundled) {
+    // For clause wording that wants to say "the three items" in words. Kept to a
+    // single line: a multi-line merge value would spill across the line-oriented
+    // canonical format and make the hashed text ambiguous to read back.
+    mergeValues.item_count = String(assets.length);
+  }
 
   const clauses: RenderedClause[] = (clauseRows ?? []).map((row: any) => ({
     ordinal: row.ordinal,
@@ -246,7 +369,7 @@ export async function assembleAgreement(
     agreement: agreement as AgreementFacts,
     lender,
     borrower,
-    asset,
+    assets,
     clauses,
     templateLabel,
     templateBodyHash: templateVersion.body_hash,
@@ -256,7 +379,9 @@ export async function assembleAgreement(
   return {
     agreement: agreement as AgreementFacts,
     signers: (signers ?? []) as SignerFacts[],
+    assets,
     asset,
+    totalDeclaredValueCents,
     clauses,
     mergeValues,
     templateLabel,
@@ -264,7 +389,10 @@ export async function assembleAgreement(
     documentHash: sha256Hex(canonicalText),
     canonicalText,
     renderInputs: {
-      format: "iwaiver-agreement-v1",
+      // v2 only where the document could not have been produced by v1. A
+      // single-item agreement records the same inputs it always did, so a
+      // document stored before bundles and one stored after are comparable.
+      format: bundled ? "iwaiver-agreement-v2" : "iwaiver-agreement-v1",
       agreement_id: agreement.id,
       template_version_id: agreement.template_version_id,
       template_body_hash: templateVersion.body_hash,
@@ -274,6 +402,9 @@ export async function assembleAgreement(
       starts_at: agreement.starts_at,
       ends_at: agreement.ends_at,
       asset,
+      ...(bundled
+        ? { assets, total_declared_value_cents: totalDeclaredValueCents }
+        : {}),
       merge_values: mergeValues,
       clause_versions: clauses.map((c) => ({
         ordinal: c.ordinal,
@@ -305,19 +436,35 @@ export async function assembleAgreement(
  * Deliberately plain text rather than JSON: when this hash is produced in a
  * dispute, someone has to be able to look at what was hashed and read it. The
  * ordering is fixed and nothing here depends on locale or map iteration order.
+ *
+ * TWO FORMATS, AND THE OLDER ONE IS FROZEN.
+ *
+ * V1 is what every agreement signed before bundles existed was hashed as. One
+ * item still produces V1, byte for byte, down to the singular `ASSET` header.
+ * Not for tidiness — because `documents.sha256` and every `signatures.
+ * document_hash_at_signing` in the database were computed from these exact
+ * bytes, and a "harmless" reformat would turn every signed agreement into one
+ * that fails its own verification. The V1 branch below is effectively immutable.
+ *
+ * V2 replaces the ASSET block with SCHEDULE A and is used only where there is
+ * more than one item — a document V1 could never have produced, so nothing
+ * already hashed can be affected by anything done to it.
  */
 function canonicalise(input: {
   agreement: AgreementFacts;
   lender: SignerFacts;
   borrower: SignerFacts;
-  asset: AssetFacts;
+  assets: AssetFacts[];
   clauses: RenderedClause[];
   templateLabel: string;
   templateBodyHash: string;
   mergeValues: Record<string, string>;
 }): string {
+  const bundled = input.assets.length > 1;
+  const asset = input.assets[0];
+
   const lines: string[] = [
-    "IWAIVER-AGREEMENT-V1",
+    bundled ? "IWAIVER-AGREEMENT-V2" : "IWAIVER-AGREEMENT-V1",
     `agreement_id: ${input.agreement.id}`,
     `template: ${input.templateLabel}`,
     `template_version_id: ${input.agreement.template_version_id}`,
@@ -331,14 +478,24 @@ function canonicalise(input: {
     `lender: ${input.lender.display_name} <${input.lender.email ?? input.lender.phone ?? ""}> [${input.lender.id}]`,
     `borrower: ${input.borrower.display_name} <${input.borrower.email ?? input.borrower.phone ?? ""}> [${input.borrower.id}]`,
     "",
-    "ASSET",
-    `class: ${input.asset.asset_class}`,
-    `description: ${input.asset.description}`,
-    `identifier: ${input.asset.identifier ?? ""}`,
-    `declared_value_cents: ${input.asset.declared_value_cents ?? ""}`,
-    `year: ${input.asset.year ?? ""}`,
-    `make: ${input.asset.make ?? ""}`,
-    `model: ${input.asset.model ?? ""}`,
+    ...(bundled
+      ? [
+          "SCHEDULE A - ITEMS LENT",
+          `item_count: ${input.assets.length}`,
+          `total_declared_value_cents: ${totalDeclaredCents(input.assets) ?? ""}`,
+          "",
+          ...scheduleLines(input.assets),
+        ]
+      : [
+          "ASSET",
+          `class: ${asset.asset_class}`,
+          `description: ${asset.description}`,
+          `identifier: ${asset.identifier ?? ""}`,
+          `declared_value_cents: ${asset.declared_value_cents ?? ""}`,
+          `year: ${asset.year ?? ""}`,
+          `make: ${asset.make ?? ""}`,
+          `model: ${asset.model ?? ""}`,
+        ]),
     "",
     "MERGE VALUES",
     ...Object.keys(input.mergeValues)

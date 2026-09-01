@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requestContext, recordAuditEvent } from "@/lib/audit";
 import {
   ensureIndividualOriginator,
+  originatorKind,
   requireActor,
 } from "@/lib/agreements/access";
 import { EMAIL_PATTERN, jsonError, readJson, text } from "@/lib/http";
@@ -12,7 +13,11 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type Body = {
+  /** One saved item. Superseded by `asset_ids`; still accepted. */
   asset_id?: unknown;
+  /** Saved items in schedule order. The lender's order, so it is preserved. */
+  asset_ids?: unknown;
+  /** One item described inline, appended after any saved ones. */
   asset?: {
     asset_class?: unknown;
     description?: unknown;
@@ -86,22 +91,53 @@ export async function POST(request: Request) {
     if (!lenderEmail) throw new TransitionRefused("Your account has no email address.");
 
     const originatorId = await ensureIndividualOriginator(db, userId);
+    const kind = await originatorKind(db, originatorId);
 
-    // --- The asset ---------------------------------------------------------
-    let assetId = text(body.asset_id, 40);
+    // --- The items -----------------------------------------------------------
+    //
+    // A bundle is built from two sources and both may be used at once: things
+    // already saved to the lender's list, and one thing described inline on the
+    // form. The order is the lender's — it becomes Schedule A, and the lead item
+    // is the one the agreement's own `asset_id` points at.
+    const savedIds = Array.isArray(body.asset_ids)
+      ? body.asset_ids
+          .map((value) => text(value, 40))
+          .filter((value): value is string => value !== null)
+      : [];
 
-    if (assetId) {
+    // A lone `asset_id` is the pre-bundle shape. Accepted so that anything still
+    // sending it keeps working.
+    const singleId = text(body.asset_id, 40);
+    if (singleId && !savedIds.includes(singleId)) savedIds.unshift(singleId);
+
+    // Deduplicate rather than refuse. Lending the same jet ski twice on one
+    // agreement is a mis-tap, and `agreement_assets` has a composite primary key
+    // that would otherwise turn it into a database error the lender cannot read.
+    const orderedIds = [...new Set(savedIds)];
+
+    if (orderedIds.length > 0) {
       const { data: owned } = await db
         .from("assets")
         .select("id")
-        .eq("id", assetId)
-        .eq("owner_user_id", userId)
-        .maybeSingle();
-      if (!owned) throw new TransitionRefused("That asset is not yours.");
-    } else {
-      const description = text(body.asset?.description, 200);
-      if (!description) throw new TransitionRefused("Describe what is being lent.");
+        .in("id", orderedIds)
+        .eq("owner_originator_id", originatorId)
+        .is("archived_at", null);
 
+      const ownedIds = new Set((owned ?? []).map((row) => row.id));
+      const stranger = orderedIds.find((id) => !ownedIds.has(id));
+      if (stranger) {
+        throw new TransitionRefused(
+          orderedIds.length === 1
+            ? "That asset is not yours."
+            : "One of those items is not yours, or has been removed from your list.",
+        );
+      }
+    }
+
+    // Something typed into the form rather than picked. Saved to the lender's
+    // list on the way past, which is what makes the second loan a tick box.
+    const description = text(body.asset?.description, 200);
+    if (description) {
       const assetClass = text(body.asset?.asset_class, 20) ?? "other";
       const declaredValue =
         typeof body.asset?.declared_value === "string"
@@ -115,7 +151,7 @@ export async function POST(request: Request) {
       const { data: asset, error } = await db
         .from("assets")
         .insert({
-          owner_user_id: userId,
+          owner_originator_id: originatorId,
           asset_class: ASSET_CLASSES.includes(assetClass) ? assetClass : "other",
           description,
           identifier: text(body.asset?.identifier, 60),
@@ -130,27 +166,41 @@ export async function POST(request: Request) {
       if (error || !asset) {
         throw new TransitionRefused(`Could not save the asset: ${error?.message}`);
       }
-      assetId = asset.id;
+      orderedIds.push(asset.id);
     }
+
+    if (orderedIds.length === 0) {
+      throw new TransitionRefused("Describe what is being lent.");
+    }
+
+    const assetId = orderedIds[0];
 
     // --- The template ------------------------------------------------------
     // A published version if one exists, otherwise the newest draft. Creating a
     // draft agreement against unreviewed wording is fine; sending it is not, and
     // the render guard is what stops that. Refusing here instead would hide the
     // real reason behind an empty screen.
+    //
+    // Selection is exact on all three axes. There is no fallback from
+    // 'organization' to 'individual': a business that has no reviewed wording of
+    // its own gets a refusal, never a private-loan release with its name in it.
     const { data: templateVersions } = await db
       .from("template_versions")
       .select("id, version, published_at, superseded_at")
       .eq("jurisdiction", jurisdiction)
       .eq("activity_class", activityClass)
+      .eq("originator_kind", kind)
       .is("superseded_at", null)
       .order("published_at", { ascending: false, nullsFirst: false })
       .order("version", { ascending: false });
 
     const templateVersion = templateVersions?.[0];
     if (!templateVersion) {
+      const activity = activityClass.replace(/_/g, " ");
       throw new TransitionRefused(
-        `There is no ${activityClass.replace(/_/g, " ")} template for ${jurisdiction} yet.`,
+        kind === "organization"
+          ? `There is no ${activity} template for ${jurisdiction} for business lenders yet. A business agreement is a different instrument from a private loan, so its wording has to be reviewed on its own before it can be used.`
+          : `There is no ${activity} template for ${jurisdiction} yet.`,
       );
     }
 
@@ -173,6 +223,26 @@ export async function POST(request: Request) {
 
     if (agreementError || !agreement) {
       throw new TransitionRefused(`Could not create the agreement: ${agreementError?.message}`);
+    }
+
+    // Schedule A. Written for every agreement, including a bundle of one, so
+    // that nothing downstream has to ask whether this is an old-shaped record.
+    const { error: bundleError } = await db.from("agreement_assets").insert(
+      orderedIds.map((id, index) => ({
+        agreement_id: agreement.id,
+        asset_id: id,
+        order_index: index,
+      })),
+    );
+
+    if (bundleError) {
+      // Delete rather than leave it. An agreement whose schedule is missing
+      // still renders — as a bundle of one, off the lead asset — which is the
+      // worst outcome available: a draft that looks complete and quietly lends
+      // one item instead of four. It is still a draft, so nothing has been
+      // signed and nothing is being destroyed.
+      await db.from("agreements").delete().eq("id", agreement.id).eq("status", "draft");
+      throw new TransitionRefused(`Could not record the items: ${bundleError.message}`);
     }
 
     const { error: signerError } = await db.from("signers").insert([
@@ -210,6 +280,7 @@ export async function POST(request: Request) {
         activity_class: activityClass,
         template_version_id: templateVersion.id,
         template_published: Boolean(templateVersion.published_at),
+        item_count: orderedIds.length,
       },
       context,
     });

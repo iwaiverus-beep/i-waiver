@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveCaller } from "@/lib/coverage/auth";
 import { CoverageRejection, createQuote } from "@/lib/coverage/service";
+import { notePartnerApiCall } from "@/lib/partners/activity";
 import type { QuoteRequest } from "@/lib/coverage/contract";
 
 export const runtime = "nodejs";
@@ -27,7 +28,11 @@ export async function POST(request: Request) {
   }
 
   try {
-    return NextResponse.json(await createQuote(body, caller));
+    const response = await createQuote(body, caller);
+    // Bookkeeping, not coverage: see lib/partners/activity.ts for why this sits
+    // in the route rather than inside the service.
+    await notePartnerApiCall(caller, "quote");
+    return NextResponse.json(response);
   } catch (error) {
     if (error instanceof CoverageRejection) {
       return NextResponse.json(

@@ -75,8 +75,11 @@ export async function POST(request: Request) {
         phone,
         notes: text(body.notes, 500),
         source,
+        // Saved on the way through creating an agreement means they have just
+        // been lent to, which is exactly what the recency ordering is for.
+        last_used_at: source === "agreement" ? new Date().toISOString() : null,
       })
-      .select("id, display_name, email, phone, source")
+      .select("id, display_name, email, phone, notes, source, last_used_at")
       .single();
 
     if (error) {

@@ -47,6 +47,9 @@ can reach a second zone.
 - `supabase/migrations/` — the schema itself. **The migrations are the source of
   truth for what the schema is; the doc is the source of truth for why.** If a
   migration contradicts the doc, fix the doc in the same PR.
+- `docs/partners.md` — how a partner gets from applying to a live key, what our
+  own staff roles can do, and what is deliberately not built yet. Read before
+  touching anything under `lib/partners/`, `lib/platform/` or `app/admin/`.
 - `README.md` — how to get it running, and what is mocked.
 
 Where the application lives:
@@ -61,6 +64,9 @@ Where the application lives:
 | `lib/compliance.ts` | the gate. Blocking, not advisory. |
 | `lib/coverage/` | the other bounded context. Reached over HTTP, never imported. |
 | `lib/audit.ts` | append-only events; verification happens in SQL, not here. |
+| `lib/partners/` | applications, membership, keys, onboarding. Never touches the agreement graph. |
+| `lib/platform/` | our own staff: role capabilities, and the append-only staff action log. |
+| `lib/support/` | tickets. One reader strips internal notes, and there is no flag that skips it. |
 
 ## Non-negotiable constraints
 
@@ -77,8 +83,13 @@ design around them. If a task seems to require breaking one, stop and ask.
 
    Precisely: no evidence table (`signatures`, `consent_records`, `documents`,
    `audit_events`, `compliance_checks`, `identity_verifications`) has any write
-   policy at all, and `signing_links`, `coverage_contexts`, `partners` and
-   `partner_integrations` are revoked from `anon` and `authenticated` outright.
+   policy at all, and `signing_links`, `coverage_contexts`, `partners`,
+   `partner_integrations`, `partner_applications`, `partner_members`,
+   `partner_onboarding`, `partner_branding`, `platform_staff`, `staff_actions`,
+   `support_tickets` and `support_messages` are revoked from `anon` and
+   `authenticated` outright. Everything the partner console and the admin console
+   show is assembled server-side on the service client, which does its own
+   authorisation — `lib/partners/access.ts` and `lib/platform/access.ts`.
    `agreements`, `signers`, `assets`, `profiles` and `originators` do carry
    draft-stage write policies from 20260829000002 — **the application does not use
    them.** They are a second line of defence, not a supported path. Everything
@@ -131,6 +142,23 @@ design around them. If a task seems to require breaking one, stop and ask.
    a decision.** The agreements app learns what cover exists from its own
    `audit_events`, not by querying `quotes` or `policies`. A join from a quote back
    into the agreement graph is the boundary quietly ceasing to exist.
+
+10. **Sandbox is a property of the credential, never of the request.** The
+    environment is resolved in `lib/coverage/auth.ts` from the integration row and
+    written onto every `coverage_contexts`, `quotes`, `policies` and `payments` row
+    the call produces. Do not add a `test: true` to any payload: a flag is one typo
+    away from writing test data with a live key, or binding real cover with a test
+    one. A live key is issued only by `partners.key.live` (super admin), only when
+    every onboarding step marked `blocksGoLive` is complete, and only for named
+    states — all three checked in the route, not the UI.
+
+11. **Staff can look; they cannot rewrite history.** `platform_staff` grants access
+    to the admin console and nothing in the evidence tables, which have no write
+    policy and must never gain one. `staff_actions` is append-only like
+    `audit_events`; corrections are new rows. And the embedded surface is
+    **co-branding, not white label** — our surface makes the offer, which is the
+    whole reason a partner is not an unlicensed producer. Never add a setting that
+    removes i-Waiver's identity from it, however reasonably a partner asks.
 
 ## Conventions
 

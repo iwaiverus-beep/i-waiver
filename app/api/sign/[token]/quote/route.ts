@@ -50,6 +50,20 @@ export async function POST(
           identifier: document.asset.identifier,
           year: document.asset.year,
         },
+        // The whole schedule when there is one, so cover is priced against what
+        // is actually on loan rather than against the first line of it. Sent
+        // only for a real bundle: `assets` present with one entry would be a
+        // second way of saying what `asset` already says.
+        assets:
+          document.assets.length > 1
+            ? document.assets.map((item) => ({
+                asset_class: item.asset_class,
+                description: item.description,
+                declared_value_cents: item.declared_value_cents,
+                identifier: item.identifier,
+                year: item.year,
+              }))
+            : null,
         supplemental: {
           waiver_efficacy: document.waiverEfficacy,
           specimen_clause_set: document.specimen,

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { currentUser, userClient } from "@/lib/supabase/server";
+import { ensureIndividualOriginator } from "@/lib/agreements/access";
 import { jsonError, readJson, text } from "@/lib/http";
 import { parseDollarsToCents } from "@/lib/format";
 
@@ -71,10 +72,18 @@ export async function POST(request: Request) {
     const yearValue = Number(body.year);
 
     const supabase = await userClient();
+
+    // An asset is owned by an originator, so saving your first jet ski is enough to
+    // mint your individual originator — the same row a first send would have made.
+    // This runs on the caller's own client like everything else in this route:
+    // `originators_insert_self` lets someone create their own individual originator
+    // and nobody else's, which is exactly the check we want here.
+    const originatorId = await ensureIndividualOriginator(supabase, user.id);
+
     const { data, error } = await supabase
       .from("assets")
       .insert({
-        owner_user_id: user.id,
+        owner_originator_id: originatorId,
         asset_class: ASSET_CLASSES.includes(assetClass) ? assetClass : "other",
         description,
         identifier: text(body.identifier, 60),

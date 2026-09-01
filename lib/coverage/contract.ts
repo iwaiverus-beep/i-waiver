@@ -49,7 +49,24 @@ export type CoverageContextInput = {
   starts_at: string;
   ends_at: string;
   parties: CoverageParty[];
+  /**
+   * The covered item, or the LEAD item where several are covered together.
+   *
+   * Kept singular and kept required-shaped so that an integration written
+   * against one asset never has to change. A caller that only knows how to send
+   * one thing still gets a real quote.
+   */
   asset?: CoverageAsset | null;
+  /**
+   * Every covered item, in schedule order, when more than one thing is lent on
+   * the same agreement. `assets[0]` and `asset` describe the same thing.
+   *
+   * Absent means "one item, see `asset`" — not "no items". A carrier that reads
+   * only `asset` prices the lead item rather than the bundle, which is wrong but
+   * not incoherent, and that is the right failure mode for an optional field on
+   * a contract other people implement.
+   */
+  assets?: CoverageAsset[] | null;
   /**
    * Anything the caller knows that the core does not ask for. A wrong guess about
    * the carrier's bind payload lands here rather than forcing a schema change or a
@@ -80,8 +97,21 @@ export type QuoteOption = {
   summary: string;
 };
 
+/**
+ * Which world a call happened in.
+ *
+ * Decided entirely by the key that was presented — there is no request field to
+ * set it, deliberately, because a "test mode" flag in a payload is a live key one
+ * typo away from writing test data, and a live payload one typo away from a real
+ * policy. It appears on every response so that a caller can assert on it in their
+ * own test suite, and so that a screen built during integration can say out loud
+ * what it is showing.
+ */
+export type Environment = "sandbox" | "live";
+
 export type QuoteResponse = {
   coverage_context_id: string;
+  environment: Environment;
   beneficiary_external_ref: string;
   options: QuoteOption[];
 };
@@ -107,6 +137,7 @@ export type BindResponse = {
   policies: BoundPolicy[];
   total_premium_cents: number;
   collector: "carrier" | "platform";
+  environment: Environment;
 };
 
 export type CoverageError = { error: string; detail?: string };

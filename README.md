@@ -30,6 +30,22 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 written to the server log and recorded as transport `console`, never as delivered.
 The borrower's signing link is shown in the terminal and on the agreement page.
 
+Optional, for the partner and admin consoles:
+
+| Variable | What it does |
+|---|---|
+| `IWAIVER_BOOTSTRAP_ADMINS` | Comma-separated addresses that become super admins on first sign-in. The only way into an empty `/admin`. Clear it once real staff rows exist — an address left here cannot be revoked from inside the product. |
+| `PARTNER_NOTIFICATIONS_EMAIL` | Where a new partner application is announced. Without it the application is still saved, and a warning says nobody was told. |
+| `SUPPORT_EMAIL` | The address customers are pointed at. Defaults to `support@` the brand domain. |
+
+Grant yourself admin access the first time:
+
+```bash
+# in .env.local
+IWAIVER_BOOTSTRAP_ADMINS=you@example.com
+# then sign in at /login and open /admin
+```
+
 ### 2. Database
 
 ```bash
@@ -119,12 +135,18 @@ Mocked or absent, deliberately:
 app/                     marketing site, lender area, signing page, API routes
   api/coverage/v1/       the coverage service's front door — partners use these too
   sign/[token]/          the borrower's entire experience
+  partners/              public pitch + docs, and the partner console
+  admin/                 i-Waiver's own console. Staff roles, not a URL secret.
 lib/agreements/          lifecycle, signing, authorisation
 lib/render/              canonical text + hash, then PDF
 lib/coverage/            separate bounded context; reached over HTTP, never imported
+lib/partners/            applications, membership, keys, onboarding
+lib/platform/            staff roles and the staff action log
+lib/support/             tickets, and the one reader that strips internal notes
 supabase/migrations/     the schema. Source of truth.
 supabase/seed/           not migrations. Read the headers.
 docs/data-model.md       why the schema is shaped this way
+docs/partners.md         how a partner gets from applying to live
 ```
 
 ## Commands

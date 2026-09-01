@@ -1,0 +1,104 @@
+/**
+ * What each i-Waiver staff role may do.
+ *
+ * A capability map rather than role checks scattered through the routes. The
+ * point is not tidiness: it is that "who can issue a live key" should be
+ * answerable by reading one file, and changing the answer should be one line
+ * that a reviewer can see. `if (role === 'admin' || role === 'super_admin')`
+ * spread over twenty handlers is a policy nobody can state.
+ *
+ * This module is deliberately free of imports. It is a statement of policy and
+ * both the server and (for rendering which buttons exist) the client may read it.
+ */
+
+export type StaffRole =
+  | "super_admin"
+  | "admin"
+  | "support"
+  | "compliance"
+  | "read_only";
+
+export type StaffCapability =
+  /** Grant, change and revoke staff access. */
+  | "staff.manage"
+  /** Approve or decline a partner application. */
+  | "partners.review"
+  /** Edit a partner, invite their people, tick off onboarding. */
+  | "partners.manage"
+  /** Issue a sandbox key on a partner's behalf. */
+  | "partners.key.sandbox"
+  /** Issue a LIVE key. The narrowest capability here, and deliberately so. */
+  | "partners.key.live"
+  /** Approve a partner's co-branding before it renders on our surface. */
+  | "branding.review"
+  /** Empty a partner's sandbox. */
+  | "sandbox.purge"
+  /** Read and reply to support tickets. */
+  | "support.respond"
+  /** Assign, prioritise and close tickets. */
+  | "support.triage"
+  /** Open or close a state, and record a clause-set review. */
+  | "compliance.states"
+  /** See the admin console at all. */
+  | "console.read";
+
+const CAPABILITIES: Record<StaffRole, StaffCapability[]> = {
+  // The only role that can create another role holder, and the only one that can
+  // put a partner into production. Both of those are one-way doors.
+  super_admin: [
+    "staff.manage",
+    "partners.review",
+    "partners.manage",
+    "partners.key.sandbox",
+    "partners.key.live",
+    "branding.review",
+    "sandbox.purge",
+    "support.respond",
+    "support.triage",
+    "compliance.states",
+    "console.read",
+  ],
+  // Runs the partner pipeline day to day. Can do everything up to the moment real
+  // money and a real carrier are involved, and then has to ask.
+  admin: [
+    "partners.review",
+    "partners.manage",
+    "partners.key.sandbox",
+    "branding.review",
+    "sandbox.purge",
+    "support.respond",
+    "support.triage",
+    "console.read",
+  ],
+  support: ["support.respond", "support.triage", "console.read"],
+  // States and clause sets are a legal judgement, not an operational one, so the
+  // person who makes it does not also run the commercial pipeline.
+  compliance: ["compliance.states", "support.respond", "console.read"],
+  read_only: ["console.read"],
+};
+
+export const STAFF_ROLE_LABELS: Record<StaffRole, string> = {
+  super_admin: "Super admin",
+  admin: "Admin",
+  support: "Support",
+  compliance: "Compliance",
+  read_only: "Read only",
+};
+
+export const STAFF_ROLE_DESCRIPTIONS: Record<StaffRole, string> = {
+  super_admin:
+    "Everything, including granting staff access and issuing live keys.",
+  admin:
+    "Approves partners, runs onboarding, issues sandbox keys. Cannot put a partner live.",
+  support: "Answers tickets. Reads accounts; changes nothing about them.",
+  compliance: "Opens and closes states, and signs off clause sets.",
+  read_only: "Sees the console. Changes nothing.",
+};
+
+export function staffCan(role: StaffRole, capability: StaffCapability): boolean {
+  return CAPABILITIES[role]?.includes(capability) ?? false;
+}
+
+export function capabilitiesFor(role: StaffRole): StaffCapability[] {
+  return [...(CAPABILITIES[role] ?? [])];
+}

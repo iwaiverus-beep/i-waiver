@@ -105,6 +105,28 @@ export async function ensureIndividualOriginator(
   return data.id;
 }
 
+/**
+ * Whether this originator is a person or a business.
+ *
+ * The third axis of template selection. Read rather than assumed, because the
+ * agreement routes will not always be the individual-only path they are today, and
+ * the failure mode of guessing is serving a private-loan release to a rental
+ * customer — which is the whole reason the axis exists.
+ */
+export async function originatorKind(
+  db: SupabaseClient,
+  originatorId: string,
+): Promise<"individual" | "organization"> {
+  const { data } = await db
+    .from("originators")
+    .select("kind")
+    .eq("id", originatorId)
+    .maybeSingle();
+
+  if (!data) throw new NotAuthorised();
+  return data.kind === "organization" ? "organization" : "individual";
+}
+
 /** Loads an agreement only if this actor originated it. */
 export async function agreementForActor(actor: Actor, agreementId: string) {
   if (actor.originatorIds.length === 0) throw new NotAuthorised();
