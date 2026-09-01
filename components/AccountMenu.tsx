@@ -196,7 +196,25 @@ export function AccountMenu() {
         <div
           role="menu"
           aria-label="Account"
-          className="absolute right-0 top-full z-50 mt-2 w-64 overflow-hidden rounded-2xl border border-line bg-paper shadow-lg shadow-ink/5"
+          /*
+            21rem is not a taste about menu width. It is the width of the lender
+            nav's three tabs — Agreements, Things you lend, People — which sit
+            hard right against the same container edge this menu does. At w-64
+            the menu was 77px narrower than that row, so opening it drew a second
+            ragged left edge a little inside the first, and the two of them
+            arguing was the only thing the eye saw.
+
+            Matching them puts the tabs a hair inside this panel and turns the
+            two into one line down the right of the page. The tabs are 333px in
+            Inter at this size, so 336 leaves them 3px in — deliberately not
+            exact, because a font that renders a shade wider should still land
+            inside the menu rather than poke out of it.
+
+            Only from `sm`, on both counts: below it AppNav drops `ml-auto` and
+            the tabs are not right-aligned to align with, and 336px would run off
+            the side of a phone.
+          */
+          className="absolute right-0 top-full z-50 mt-2 w-64 overflow-hidden rounded-2xl border border-line bg-paper shadow-lg shadow-ink/5 sm:w-[21rem]"
         >
           <div className="flex items-center gap-3 border-b border-line px-4 py-3.5">
             <Avatar url={me?.avatar_url ?? null} name={name} email={email} size="lg" />
