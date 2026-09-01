@@ -220,12 +220,22 @@ export async function assembleAgreement(
   if (signersError) throw new RenderError(signersError.message);
 
   const lender = signers?.find((s) => s.role === "lender");
-  const borrower = signers?.find((s) => s.role === "borrower");
+
+  // The other side is a borrower on a loan and a participant on a release. Both
+  // are the single counterparty of a two-party instrument, and everything below
+  // treats them identically except for what the document calls them — which is
+  // the one thing that must not be identical, since only one of them took the
+  // thing.
+  const borrower = signers?.find(
+    (s) => s.role === "borrower" || s.role === "participant",
+  );
   if (!lender || !borrower) {
     throw new RenderError(
       "an agreement needs both a lender and a borrower before it can be rendered",
     );
   }
+
+  const participantRelease = borrower.role === "participant";
 
   // Snapshots first, live rows only while still a draft. Once sent, the frozen
   // copy is the only truth about what was lent.
@@ -327,7 +337,13 @@ export async function assembleAgreement(
   // the branch that could not have existed before.
   const mergeValues: Record<string, string> = {
     lender_name: lender.display_name,
-    borrower_name: borrower.display_name,
+    // One key or the other, never both. A participant clause that reached for
+    // {{borrower_name}} would be describing the wrong person, and `merge()`
+    // raising on an unknown field is what keeps that from being a quiet
+    // substitution of one name for another.
+    ...(participantRelease
+      ? { participant_name: borrower.display_name }
+      : { borrower_name: borrower.display_name }),
     asset_description: describeBundle(assets),
     asset_identifier: bundled
       ? "listed in Schedule A"
@@ -379,6 +395,7 @@ export async function assembleAgreement(
     agreement: agreement as AgreementFacts,
     lender,
     borrower,
+    participantRelease,
     assets,
     clauses,
     templateLabel,
@@ -402,7 +419,16 @@ export async function assembleAgreement(
       // v2 only where the document could not have been produced by v1. A
       // single-item agreement records the same inputs it always did, so a
       // document stored before bundles and one stored after are comparable.
-      format: bundled ? "iwaiver-agreement-v2" : "iwaiver-agreement-v1",
+      //
+      // A participant release is its own instrument and says so. It also always
+      // records the schedule below, single item or not, because that is the form
+      // its canonical text takes — and these inputs have to rebuild those exact
+      // bytes.
+      format: participantRelease
+        ? "iwaiver-participant-v1"
+        : bundled
+          ? "iwaiver-agreement-v2"
+          : "iwaiver-agreement-v1",
       agreement_id: agreement.id,
       template_version_id: agreement.template_version_id,
       template_body_hash: templateVersion.body_hash,
@@ -412,7 +438,7 @@ export async function assembleAgreement(
       starts_at: agreement.starts_at,
       ends_at: agreement.ends_at,
       asset,
-      ...(bundled
+      ...(participantRelease || bundled
         ? { assets, total_declared_value_cents: totalDeclaredValueCents }
         : {}),
       merge_values: mergeValues,
@@ -459,22 +485,37 @@ export async function assembleAgreement(
  * V2 replaces the ASSET block with SCHEDULE A and is used only where there is
  * more than one item — a document V1 could never have produced, so nothing
  * already hashed can be affected by anything done to it.
+ *
+ * PARTICIPANT-V1 is a third format on the same reasoning, one step further out.
+ * It is not a variant of the agreement formats but a different instrument: the
+ * second party is a `participant:` rather than a `borrower:`, and nothing here
+ * lends anything to them. It always uses the schedule block, singular or not,
+ * because it is new and has no signed past to stay byte-compatible with. No
+ * agreement that existed before bookings can reach this branch, so V1 and V2
+ * remain exactly as frozen as they were.
  */
 function canonicalise(input: {
   agreement: AgreementFacts;
   lender: SignerFacts;
   borrower: SignerFacts;
+  participantRelease: boolean;
   assets: AssetFacts[];
   clauses: RenderedClause[];
   templateLabel: string;
   templateBodyHash: string;
   mergeValues: Record<string, string>;
 }): string {
-  const bundled = input.assets.length > 1;
+  // A participant release always takes the schedule form. Everywhere else the
+  // single-item shape is V1's frozen ASSET block and must stay that way.
+  const bundled = input.participantRelease || input.assets.length > 1;
   const asset = input.assets[0];
 
   const lines: string[] = [
-    bundled ? "IWAIVER-AGREEMENT-V2" : "IWAIVER-AGREEMENT-V1",
+    input.participantRelease
+      ? "IWAIVER-PARTICIPANT-V1"
+      : bundled
+        ? "IWAIVER-AGREEMENT-V2"
+        : "IWAIVER-AGREEMENT-V1",
     `agreement_id: ${input.agreement.id}`,
     `template: ${input.templateLabel}`,
     `template_version_id: ${input.agreement.template_version_id}`,
@@ -486,11 +527,13 @@ function canonicalise(input: {
     "",
     "PARTIES",
     `lender: ${input.lender.display_name} <${input.lender.email ?? input.lender.phone ?? ""}> [${input.lender.id}]`,
-    `borrower: ${input.borrower.display_name} <${input.borrower.email ?? input.borrower.phone ?? ""}> [${input.borrower.id}]`,
+    `${input.participantRelease ? "participant" : "borrower"}: ${input.borrower.display_name} <${input.borrower.email ?? input.borrower.phone ?? ""}> [${input.borrower.id}]`,
     "",
     ...(bundled
       ? [
-          "SCHEDULE A - ITEMS LENT",
+          input.participantRelease
+            ? "SCHEDULE A - ITEMS INVOLVED"
+            : "SCHEDULE A - ITEMS LENT",
           `item_count: ${input.assets.length}`,
           `total_declared_value_cents: ${totalDeclaredCents(input.assets) ?? ""}`,
           "",

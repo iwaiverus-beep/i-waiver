@@ -26,6 +26,18 @@ export type DraftInput = {
   originatorId: string;
   /** Decides which template is used. There is no fallback between the two. */
   originatorKind: "individual" | "organization";
+  /**
+   * Which instrument this is. `rental` is the loan — custody, damage, the
+   * bailment — and is what everything that existed before bookings creates.
+   * `participant` is a release by somebody who takes part without ever taking
+   * the thing, and it selects an entirely different clause set. As with
+   * `originatorKind`, there is no fallback between the two: a participant with
+   * no participant wording published gets a refusal, never the renter's
+   * document with their name in it.
+   */
+  instrumentKind?: "rental" | "participant";
+  /** The booking this belongs to, when it is part of one. */
+  groupId?: string | null;
   /** Schedule A, in the order it will appear. The first is the lead item. */
   assetIds: string[];
   jurisdiction: string;
@@ -46,6 +58,12 @@ export type DraftInput = {
     name: string;
     email: string;
   };
+  /**
+   * The other side. On a `rental` instrument that is the borrower, who takes
+   * custody; on a `participant` one it is somebody who takes part and never
+   * takes the thing. The field keeps its name because every existing caller
+   * uses it and only the signer's ROLE differs.
+   */
   borrower: { name: string; email: string; phone?: string | null };
   /** The originating platform's own id, when there is one. */
   partnerExternalRef?: string | null;
@@ -70,17 +88,25 @@ export async function createDraftAgreement(
   // the render guard is what stops that. Refusing here instead would hide the
   // real reason behind an empty screen.
   //
-  // Selection is exact on all three axes. There is no fallback from
+  // Selection is exact on all four axes. There is no fallback from
   // 'organization' to 'individual': a business that has no reviewed wording of
   // its own gets a refusal, never a private-loan release with its name in it.
   // That applies to a partner-managed lender too, and it is the reason the
   // partner API refuses before it creates anything rather than after.
+  //
+  // The same holds for the fourth axis. A participant release and a loan are
+  // different instruments — the loan makes its signer answerable for returning
+  // the thing, which a passenger never had — so an unpublished participant set
+  // is a refusal, not a reason to reach for the renter's document.
+  const instrumentKind = input.instrumentKind ?? "rental";
+
   const { data: templateVersions } = await db
     .from("template_versions")
     .select("id, version, published_at, superseded_at")
     .eq("jurisdiction", input.jurisdiction)
     .eq("activity_class", input.activityClass)
     .eq("originator_kind", input.originatorKind)
+    .eq("instrument_kind", instrumentKind)
     .is("superseded_at", null)
     .order("published_at", { ascending: false, nullsFirst: false })
     .order("version", { ascending: false });
@@ -89,9 +115,11 @@ export async function createDraftAgreement(
   if (!templateVersion) {
     const activity = input.activityClass.replace(/_/g, " ");
     throw new TransitionRefused(
-      input.originatorKind === "organization"
-        ? `There is no ${activity} template for ${input.jurisdiction} for business lenders yet. A business agreement is a different instrument from a private loan, so its wording has to be reviewed on its own before it can be used.`
-        : `There is no ${activity} template for ${input.jurisdiction} yet.`,
+      instrumentKind === "participant"
+        ? `There is no ${activity} participant release for ${input.jurisdiction} yet. Somebody who rides along signs a different instrument from the person who took the thing — it says nothing about returning it in good order, because they never had it — so its wording has to be reviewed on its own before it can be used.`
+        : input.originatorKind === "organization"
+          ? `There is no ${activity} template for ${input.jurisdiction} for business lenders yet. A business agreement is a different instrument from a private loan, so its wording has to be reviewed on its own before it can be used.`
+          : `There is no ${activity} template for ${input.jurisdiction} yet.`,
     );
   }
 
@@ -110,6 +138,11 @@ export async function createDraftAgreement(
       status: "draft",
       cover_requested: input.coverRequested,
       partner_external_ref: input.partnerExternalRef ?? null,
+      // Both or neither — the check constraint says so, and a group_id without a
+      // role would be an agreement in a booking that cannot say what it is doing
+      // there.
+      group_id: input.groupId ?? null,
+      group_role: input.groupId ? instrumentKind : null,
     })
     .select("id")
     .single();
@@ -162,7 +195,11 @@ export async function createDraftAgreement(
     },
     {
       agreement_id: agreement.id,
-      role: "borrower",
+      // The other side of the instrument. On a loan they are the borrower and
+      // take custody; on a participant release they took nothing, and calling
+      // them the borrower on the face of the document would say something untrue
+      // about them.
+      role: instrumentKind === "participant" ? "participant" : "borrower",
       capacity: "adult",
       // Deliberately no user_id. A signer is not a user, and the borrower will
       // almost certainly never have an account.
@@ -187,6 +224,8 @@ export async function createDraftAgreement(
       template_version_id: templateVersion.id,
       template_published: Boolean(templateVersion.published_at),
       item_count: input.assetIds.length,
+      instrument_kind: instrumentKind,
+      ...(input.groupId ? { group_id: input.groupId } : {}),
       ...(input.auditExtra ?? {}),
     },
     context: input.context,

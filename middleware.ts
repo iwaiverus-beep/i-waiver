@@ -5,9 +5,12 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
  * Refreshes the Supabase session cookie on every matched request, and keeps
  * unauthenticated visitors out of the lender area.
  *
- * `/sign/...` and `/start/...` are intentionally not matched. A borrower has no session, no account,
+ * `/sign/...`, `/start/...` and `/join/...` are intentionally not matched. A
+ * borrower has no session, no account,
  * and no business acquiring either — their capability is the token in the URL, and
- * it is checked server-side in the route that uses it.
+ * it is checked server-side in the route that uses it. `/join/...` is the same
+ * bargain seen from the dock: the slug names a booking and grants nothing, and the
+ * route it posts to does its own checking on the service client.
  */
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -44,6 +47,7 @@ export async function middleware(request: NextRequest) {
   const isLenderArea =
     path.startsWith("/dashboard") ||
     path.startsWith("/agreements") ||
+    path.startsWith("/groups") ||
     path.startsWith("/assets") ||
     path.startsWith("/contacts") ||
     path.startsWith("/requests") ||
@@ -85,6 +89,7 @@ export const config = {
   matcher: [
     "/dashboard/:path*",
     "/agreements/:path*",
+    "/groups/:path*",
     "/assets/:path*",
     "/contacts/:path*",
     "/requests/:path*",

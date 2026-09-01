@@ -71,6 +71,13 @@ export async function sendEmail(message: {
 
 /** The email that carries a signing link. */
 export function signingInvitation(input: {
+  /**
+   * True when the reader is riding along rather than taking the thing. They are
+   * being asked for a release, not handed a boat, and an email telling them
+   * otherwise is the first thing they read about a document they are about to
+   * sign.
+   */
+  participant?: boolean;
   borrowerName: string;
   lenderName: string;
   assetDescription: string;
@@ -92,11 +99,23 @@ export function signingInvitation(input: {
   const lines = [
     `Hi ${input.borrowerName.split(" ")[0]},`,
     "",
-    bundled
-      ? `${input.lenderName} is lending you ${input.items!.length} things, and has sent you one agreement covering all of them.`
-      : `${input.lenderName} is lending you the ${input.assetDescription} and has sent you an agreement to sign.`,
+    input.participant
+      ? `${input.lenderName} has sent you your own release to sign before you take part. It covers the ${input.assetDescription}.`
+      : bundled
+        ? `${input.lenderName} is lending you ${input.items!.length} things, and has sent you one agreement covering all of them.`
+        : `${input.lenderName} is lending you the ${input.assetDescription} and has sent you an agreement to sign.`,
     "",
-    ...(bundled ? [...input.items!.map((item) => `  - ${item}`), ""] : []),
+    ...(input.participant
+      ? [
+          "This is yours alone. Everyone else coming signs their own, and nobody's signature stands in for anybody else's.",
+          "",
+          "You are not taking the thing and you are not responsible for returning it — that sits with whoever booked it, on their own agreement.",
+          "",
+        ]
+      : []),
+    ...(bundled && !input.participant
+      ? [...input.items!.map((item) => `  - ${item}`), ""]
+      : []),
     `From: ${input.starts}`,
     `Until: ${input.ends}`,
     "",
@@ -105,7 +124,9 @@ export function signingInvitation(input: {
     "",
     `The link works for ${input.expiresHours} hours and can be used once. You do not need an account.`,
     "",
-    "Cover for the loan period is included in what you sign — you will see the options before you sign anything.",
+    input.participant
+      ? "Cover for the period is included in what you sign — you will see the options before you sign anything."
+      : "Cover for the loan period is included in what you sign — you will see the options before you sign anything.",
   ];
 
   if (input.specimen) {
@@ -118,7 +139,9 @@ export function signingInvitation(input: {
   lines.push("", "— iWaiver");
 
   return {
-    subject: `${input.lenderName} sent you an agreement to sign`,
+    subject: input.participant
+      ? `${input.lenderName} sent you a release to sign`
+      : `${input.lenderName} sent you an agreement to sign`,
     text: lines.join("\n"),
   };
 }

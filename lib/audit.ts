@@ -17,7 +17,12 @@ export type AuditEventType =
   | "paid"
   | "voided";
 
-export type AuditActor = "lender" | "borrower" | "system" | "carrier";
+export type AuditActor =
+  | "lender"
+  | "borrower"
+  | "participant"
+  | "system"
+  | "carrier";
 
 export type RequestContext = {
   ip: string | null;

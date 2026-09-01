@@ -305,10 +305,22 @@ export async function renderAgreementPdf(input: {
   }
 
   // ---- Facts --------------------------------------------------------------
-  L.text("The loan", { font: fonts.bold, size: 12 });
+  //
+  // A participant release is headed and labelled as what it is. Printing
+  // "Borrower" over the name of somebody who never had the boat would be the one
+  // sentence on the page a claims adjuster could quote back.
+  const participantRelease = doc.signers.some((s) => s.role === "participant");
+
+  L.text(participantRelease ? "The activity" : "The loan", {
+    font: fonts.bold,
+    size: 12,
+  });
   L.gap(6);
   L.keyValue("Lender", nameFor(doc, "lender"));
-  L.keyValue("Borrower", nameFor(doc, "borrower"));
+  L.keyValue(
+    participantRelease ? "Participant" : "Borrower",
+    nameFor(doc, participantRelease ? "participant" : "borrower"),
+  );
   const bundled = doc.assets.length > 1;
 
   if (bundled) {
@@ -317,7 +329,13 @@ export async function renderAgreementPdf(input: {
     L.keyValue("Asset", doc.mergeValues.asset_description);
     if (doc.asset.identifier) L.keyValue("HIN / VIN / serial", doc.asset.identifier);
   }
-  L.keyValue("Declared value", formatCents(doc.totalDeclaredValueCents));
+  // The declared value is what the damage clause is measured against, and a
+  // participant does not carry that clause. Printing a number next to their name
+  // that they are not answerable for is an invitation to read the document as
+  // saying they are.
+  if (!participantRelease) {
+    L.keyValue("Declared value", formatCents(doc.totalDeclaredValueCents));
+  }
   L.keyValue("From", doc.mergeValues.starts_at);
   L.keyValue("Until", doc.mergeValues.ends_at);
   L.keyValue("State of activity", doc.agreement.jurisdiction);
@@ -331,7 +349,10 @@ export async function renderAgreementPdf(input: {
   // skipped — which is an argument about whether they knew what they signed for.
   if (bundled) {
     L.need(80);
-    L.text("Schedule A — items lent", { font: fonts.bold, size: 12 });
+    L.text(
+      participantRelease ? "Schedule A — items involved" : "Schedule A — items lent",
+      { font: fonts.bold, size: 12 },
+    );
     L.gap(6);
 
     doc.assets.forEach((item, index) => {

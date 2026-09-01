@@ -70,6 +70,9 @@ Where the application lives:
 | `lib/agreements/access.ts` | authorisation, since the service client bypasses RLS. |
 | `lib/agreements/create.ts` | the draft, identical however it was asked for. Both callers use it. |
 | `lib/agreements/partner-origination.ts` | agreements a partner platform creates for its customer. |
+| `lib/agreements/groups.ts` | bookings: several households on one thing, one release each. |
+| `lib/agreements/list.ts` | the lender's list — search, sort, filter, page. Read as the user, over the `agreement_list` view. |
+| `lib/agreements/archive.ts` | filing finished agreements off the working list. A shelf, never a delete. |
 | `lib/render/agreement.ts` | canonical text and the hash a signature is bound to. |
 | `lib/render/pdf.ts` | the artifact. Reproducible bytes, pinned dates. |
 | `lib/compliance.ts` | the gate. Blocking, not advisory. |
@@ -206,6 +209,22 @@ design around them. If a task seems to require breaking one, stop and ask.
     **co-branding, not white label** — our surface makes the offer, which is the
     whole reason a partner is not an unlicensed producer. Never add a setting that
     removes i-Waiver's identity from it, however reasonably a partner asks.
+
+14. **One release, one releasor.** A release is personal to the person giving it,
+    and no adult can give one on another adult's behalf. So when several
+    households take one boat, that is several agreements grouped into a
+    `rental_group` (20260901000023) — never one agreement with more signers on
+    it. One `rental` agreement for whoever took the thing, one `participant`
+    agreement each for everybody else, each with its own document, hash,
+    signature, evidence chain and quote.
+
+    `instrument_kind` is the fourth axis of template selection, after
+    jurisdiction, activity_class and originator_kind, and like the third it has
+    **no fallback**. The participant set omits `damage_responsibility`
+    deliberately: that clause can only be given by somebody who took custody, and
+    putting it to a passenger both says something untrue about them and invites
+    the argument that the whole document was boilerplate. Never add a signer to
+    somebody else's agreement to save a step.
 
 ## Conventions
 

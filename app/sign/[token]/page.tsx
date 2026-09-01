@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Container } from "@/components/ui";
 import { Note } from "@/components/app-ui";
 import { SigningFlow } from "@/components/SigningFlow";
@@ -55,6 +56,25 @@ export default async function SignPage({
   const { document } = session;
   const other = document.signers.find((s) => s.id !== session.signerId);
 
+  // The same page renders for any of the three, so it has to say which side of
+  // the loan the reader is on. Told wrong, it hands the lender a document
+  // claiming they are borrowing their own thing — or tells somebody who is only
+  // riding along that a boat has been lent to them.
+  const isLender = session.role === "lender";
+  const isParticipant = session.role === "participant";
+  const what =
+    document.assets.length > 1
+      ? `${document.assets.length} things`
+      : `the ${document.asset.description}`;
+
+  // The education card belongs to whoever operates the thing, which is the
+  // borrower. The compliance gate takes the same view; this keeps the form from
+  // asking a question the lender cannot answer — or from asking a passenger for
+  // a licence to drive a boat they are not driving, which on a family outing is
+  // the question that stops everybody signing.
+  const askForEducationCard =
+    session.educationRequired && !isLender && !isParticipant;
+
   return (
     <Container className="py-14 sm:py-20">
       <div className="mx-auto max-w-2xl">
@@ -62,15 +82,18 @@ export default async function SignPage({
           For {session.displayName}
         </p>
         <h1 className="mt-3 font-serif text-3xl leading-tight tracking-tight sm:text-4xl">
-          {other?.display_name ?? "Someone"} is lending you{" "}
-          {document.assets.length > 1
-            ? `${document.assets.length} things`
-            : `the ${document.asset.description}`}
-          .
+          {isLender
+            ? `You are lending ${other?.display_name ?? "someone"} ${what}.`
+            : isParticipant
+              ? `Your own release, before you take part.`
+              : `${other?.display_name ?? "Someone"} is lending you ${what}.`}
         </h1>
         <p className="mt-4 text-base leading-relaxed text-ink-soft">
-          Read it, then sign at the bottom. You do not need an account, and you will not
-          be asked to make one.
+          {isLender
+            ? "Read it, then sign at the bottom. This is your own signature, on your own agreement — the other side signs from their own link."
+            : isParticipant
+              ? `This covers you and nobody else — everyone else coming signs their own, and no signature stands in for another. You are not taking ${what} and you are not responsible for returning it; that sits with whoever booked it. Read it, then sign at the bottom. You do not need an account.`
+              : "Read it, then sign at the bottom. You do not need an account, and you will not be asked to make one."}
         </p>
 
         <div className="mt-8 space-y-4">
@@ -99,7 +122,12 @@ export default async function SignPage({
                 : document.mergeValues.asset_description
             }
           />
-          <Fact label="Worth" value={formatCents(document.totalDeclaredValueCents)} />
+          {/* Not shown to a participant. "Worth" is the figure the damage clause
+              is measured against, and they do not carry that clause — a number
+              on the page invites the reading that they are answerable for it. */}
+          {!isParticipant && (
+            <Fact label="Worth" value={formatCents(document.totalDeclaredValueCents)} />
+          )}
           <Fact label="From" value={document.mergeValues.starts_at} />
           <Fact label="Until" value={document.mergeValues.ends_at} />
           <Fact label="Where" value={document.agreement.jurisdiction} />
@@ -112,7 +140,9 @@ export default async function SignPage({
         {document.assets.length > 1 && (
           <section className="mt-8 rounded-2xl border border-line px-6 py-5">
             <h2 className="font-serif text-lg tracking-tight">
-              Schedule A — what you are borrowing
+              {isParticipant
+                ? "Schedule A — what you are taking part in"
+                : "Schedule A — what you are borrowing"}
             </h2>
             <ol className="mt-4 divide-y divide-line">
               {document.assets.map((item, index) => (
@@ -184,10 +214,26 @@ export default async function SignPage({
             consentText={session.consentText}
             coverRequested={document.agreement.cover_requested}
             documentHash={document.documentHash}
-            educationRequired={session.educationRequired}
+            educationRequired={askForEducationCard}
             educationAuthority={session.educationAuthority}
           />
         </div>
+
+        {/*
+          A borrower arrives here from an email and leaves the same way. The
+          lender arrives from their own agreement page, so without this they sign
+          and land in a room with no door.
+        */}
+        {isLender && (
+          <p className="mt-10 text-center text-sm">
+            <Link
+              href={`/agreements/${session.agreementId}`}
+              className="text-ink-soft underline underline-offset-4 transition-colors hover:text-ink"
+            >
+              Back to the agreement
+            </Link>
+          </p>
+        )}
       </div>
     </Container>
   );

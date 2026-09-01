@@ -67,9 +67,15 @@ begin
 end;
 $dev$;
 
--- Prove the guard now passes for the Florida PWC template, and fails loudly if
--- something was missed. A silent success here would be worse than an error.
+-- Prove the guard now passes for both Florida PWC instruments — the loan and the
+-- participant release — and fails loudly if something was missed. A silent success
+-- here would be worse than an error.
+--
+-- Both, not just the loan: a booking with several households on it renders one of
+-- each, and a development database where only the loan is publishable would fail
+-- at the moment a participant taps the check-in code, which is the least useful
+-- place to discover it.
 select public.assert_clause_set_reviewed(tv.id)
 from template_versions tv
 join templates t on t.id = tv.template_id
-where t.slug = 'pwc-loan-fl' and tv.version = 1;
+where t.slug in ('pwc-loan-fl', 'pwc-participant-fl') and tv.version = 1;

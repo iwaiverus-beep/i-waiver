@@ -84,6 +84,8 @@ export async function runComplianceGate(
     agreementId: string;
     phase: "send" | "sign";
     signerId?: string | null;
+    /** Which side is signing. Some facts are the operator's alone. */
+    signerRole?: string | null;
     attestations?: Attestations;
   },
 ): Promise<GateOutcome> {
@@ -219,7 +221,38 @@ export async function runComplianceGate(
 
   // --- Education certificate ----------------------------------------------
   if (ruleSet?.education_required) {
-    if (input.phase === "sign") {
+    // The card belongs to whoever operates the thing, which is the borrower.
+    //
+    // Put to anybody else it is a question they cannot answer honestly, and a
+    // blocking one: for the lender it would lock the only person who can complete
+    // the agreement out of signing it, and for a participant riding along it
+    // would mean a boat full of families where only the licensed adults are
+    // allowed to sign a release — which is precisely the group the release exists
+    // to cover.
+    // Written as an exclusion rather than as `=== "borrower"` on purpose. A
+    // caller that does not name a role still gets asked, which is the old
+    // behaviour and the safe direction: asking somebody who does not need the
+    // card is a nuisance, not asking somebody who does is a compliance hole.
+    const operator =
+      input.signerRole !== "lender" && input.signerRole !== "participant";
+
+    if (input.phase === "sign" && !operator) {
+      findings.push({
+        kind: "education_cert",
+        result: "skipped",
+        blocking: false,
+        signerId: input.signerId ?? null,
+        message:
+          input.signerRole === "participant"
+            ? "The education card is the operator's to hold. This signer is riding along, not driving."
+            : "The education card is the borrower's to hold, not the lender's.",
+        evidence: {
+          role: input.signerRole ?? "unknown",
+          authority: ruleSet.education_authority,
+          basis: "not-the-operator",
+        },
+      });
+    } else if (input.phase === "sign") {
       const holds = input.attestations?.holdsEducationCard === true;
       findings.push({
         kind: "education_cert",

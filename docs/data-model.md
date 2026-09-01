@@ -183,6 +183,68 @@ On the coverage side, `coverage_contexts.assets jsonb` mirrors this: `asset`
 keeps its meaning as the single or lead item so an existing partner integration
 needs no change, and `assets` carries the full schedule when there is one.
 
+### Bookings — several households, one thing
+
+Bundles are many things for one person. The mirror case is one thing for many
+people: a charter taken by three families, four couples on a pontoon, a corporate
+day out. It does **not** get solved the same way, and the asymmetry is the whole
+point.
+
+A bailment of several chattels to one person is one bailment, so it fits on one
+instrument with a schedule attached. A release by twelve people is twelve
+releases, because a release is personal to the releasor and no adult can give one
+on another adult's behalf. Twelve names on one document would leave the lender
+protected against whoever held the pen. Two further reasons point the same way: a
+signature is bound to the exact bytes of one document, so twelve people signing
+one instrument at different moments have either signed different things or been
+made to wait for each other; and a document struck down takes everything on it,
+which is why the four instruments are already kept as separate clause records.
+
+So the grouping sits **above** the agreement graph and changes nothing inside it:
+
+```
+rental_groups
+  ├─ 1 agreement, group_role = 'rental'        the loan. Custody, damage, deposit.
+  └─ N agreements, group_role = 'participant'  one release per other adult aboard.
+```
+
+Same lender, same schedule of items, same window, same state — each snapshotted
+onto its own agreement. Each has its own document, hash, signature, evidence
+chain and coverage quote. Voiding one takes only that one. `rental_groups` holds
+no facts about the loan, deliberately: they are all on the agreements already,
+and a second copy is a second answer. It is not an evidence table — the grouping
+is disposable, which is why `agreements.group_id` is `on delete restrict`.
+
+**`instrument_kind` is the fourth axis of template selection**, after
+jurisdiction, activity_class and originator_kind, and like the third it has no
+fallback. The participant clause set is `assumption_of_risk`, `release`,
+`covenant_not_to_sue`, `indemnity` and the ESIGN consent — which is shared with
+the renter's set, being a disclosure about signing electronically rather than
+about who is on the boat. `damage_responsibility` is absent, and its absence is
+what makes the instrument a different one: it can only be given by somebody who
+took custody.
+
+`signers.role` gains `participant` alongside `borrower`. Both are the single
+counterparty of a two-party instrument and the code treats them identically
+except in what the document calls them — the one thing that must differ. The
+canonical text gains a third format, `IWAIVER-PARTICIPANT-V1`, on the same
+reasoning as V2: it is a shape no document signed before bookings could have
+produced, so V1 and V2 stay frozen exactly as they were.
+
+**`group_links`** are the check-in code at the dock — a third kind of link, and
+the reason it may do what `intake_links` may not is worth stating. An intake link
+creates a *request*, never an agreement, because a stranger with a photograph of
+a poster must not be able to mint instruments in someone else's name. A group
+link does create an agreement, and is safe only because the scanner chooses
+**nothing**: lender, thing, window, state and wording are all fixed by the
+booking before the code exists, and the only thing they can add is themselves.
+Short-lived, capped, revocable, and minted by a signed-in lender for one booking.
+
+Minors remain out of scope, and this is where that bites hardest: a group of
+families where only the adults can sign is a boat where half the people aboard
+have signed nothing. Adult groups work today; the literal families case waits on
+the guardian product.
+
 ### `signers`
 **The important one.** Independent of `users`.
 
@@ -190,7 +252,7 @@ needs no change, and `assets` carries the full schedule when there is one.
 |---|---|
 | `id` | uuid |
 | `agreement_id` | FK |
-| `role` | enum: `lender`, `borrower`, `co_signer`, `witness` |
+| `role` | enum: `lender`, `borrower`, `participant`, `co_signer`, `witness`. `participant` is the counterparty on a participant release — see Bookings above |
 | `user_id` | **nullable** FK users |
 | `display_name` | as entered by whoever created the agreement |
 | `email`, `phone` | at least one required for delivery |
@@ -281,6 +343,16 @@ kept for whatever period the underlying law requires.
 | hot | 12–24 months | visible in-app, indexed, searchable |
 | cold | to the retention floor (3 yrs at launch) | archived object storage, retrievable on request |
 | extended | minor involved: to age 18 + limitation period | cold, flagged, exempt from purge |
+
+**Where hot ends is a decision, not a timer.** `agreements.archived_at` (20260901000030)
+is the in-app half of that boundary and the only half built so far: an archived agreement
+is off the lender's working list and unchanged in every other respect — same row, same
+documents, same audit chain, same retention floor, still openable by id. Nothing moves it
+there on a schedule. The lender files one away, or accepts an offer to file away
+everything whose loan window closed more than ninety days ago, and either can be undone.
+That is deliberate: a product that hides somebody's records on a clock they never set is
+a product they will accuse of deleting them. `RETENTION_FLOOR_YEARS` (`lib/env.ts`) is the
+floor itself, and it is what the screen quotes back to them.
 
 Two guardrails that make 3 years safe to start with:
 

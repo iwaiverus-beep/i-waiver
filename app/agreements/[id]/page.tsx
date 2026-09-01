@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { Container } from "@/components/ui";
 import { Empty, Mono, Note, Panel, Row, StatusBadge } from "@/components/app-ui";
 import { AgreementActions } from "@/components/AgreementActions";
+import { BookingPanel } from "@/components/BookingPanel";
 import { SigningLinks } from "@/components/SigningLinks";
 import { VerifyChain } from "@/components/VerifyChain";
 import {
@@ -71,7 +72,14 @@ export default async function AgreementPage({
   }
 
   const lender = (signers ?? []).find((s) => s.role === "lender");
-  const borrower = (signers ?? []).find((s) => s.role === "borrower");
+  // Borrower on a loan, participant on a release from a booking. One counterparty
+  // either way; only what the page calls them differs, and it has to differ —
+  // heading somebody "Borrower" who never had the boat is the one line on the
+  // screen that would be quoted back.
+  const borrower = (signers ?? []).find(
+    (s) => s.role === "borrower" || s.role === "participant",
+  );
+  const participantRelease = borrower?.role === "participant";
 
   // False when the render failed, which is right: with no assembled document
   // there is no schedule to show, and the refusal above is the useful thing.
@@ -157,10 +165,13 @@ export default async function AgreementPage({
 
       <div className="mt-10 grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="space-y-6">
-          <Panel title="The loan">
+          <Panel title={participantRelease ? "The activity" : "The loan"}>
             <dl>
               <Row label="Lender" value={`${lender?.display_name ?? "—"} · ${lender?.email ?? ""}`} />
-              <Row label="Borrower" value={`${borrower?.display_name ?? "—"} · ${borrower?.email ?? ""}`} />
+              <Row
+                label={participantRelease ? "Participant" : "Borrower"}
+                value={`${borrower?.display_name ?? "—"} · ${borrower?.email ?? ""}`}
+              />
               <Row
                 label={bundled ? "Items" : "Asset"}
                 value={
@@ -169,10 +180,16 @@ export default async function AgreementPage({
                     : (document?.mergeValues.asset_description ?? "—")
                 }
               />
-              <Row
-                label={bundled ? "Total declared value" : "Declared value"}
-                value={formatCents(document?.totalDeclaredValueCents)}
-              />
+              {/* No declared value on a participant release. It is the figure the
+                  damage clause is measured against, and they do not carry that
+                  clause — a number beside their name invites the reading that
+                  they do. */}
+              {!participantRelease && (
+                <Row
+                  label={bundled ? "Total declared value" : "Declared value"}
+                  value={formatCents(document?.totalDeclaredValueCents)}
+                />
+              )}
               <Row label="From" value={document?.mergeValues.starts_at ?? "—"} />
               <Row label="Until" value={document?.mergeValues.ends_at ?? "—"} />
               <Row
@@ -186,13 +203,28 @@ export default async function AgreementPage({
             </dl>
           </Panel>
 
+          <BookingPanel
+            agreementId={id}
+            groupId={agreement.group_id ?? null}
+            groupRole={agreement.group_role ?? null}
+            borrowerName={borrower?.display_name ?? "They"}
+          />
+
           {/* The schedule, only where there is one. A single-item agreement
               already said everything in the panel above, and repeating it as a
               one-row table would be furniture. */}
           {bundled && (
             <Panel
-              title="Schedule A — items lent"
-              description="These go on one waiver, signed once. The numbering is what appears on the document."
+              title={
+                participantRelease
+                  ? "Schedule A — items involved"
+                  : "Schedule A — items lent"
+              }
+              description={
+                participantRelease
+                  ? "What this person is taking part in. Nothing here is lent to them — the numbering is what appears on the document."
+                  : "These go on one waiver, signed once. The numbering is what appears on the document."
+              }
             >
               <ol className="divide-y divide-line">
                 {document!.assets.map((item, index) => (

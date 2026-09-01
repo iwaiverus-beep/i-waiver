@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { recordAuditEvent, type RequestContext } from "@/lib/audit";
+import { recordAuditEvent, type AuditActor, type RequestContext } from "@/lib/audit";
 import { runComplianceGate, type Attestations } from "@/lib/compliance";
 import { assembleAgreement, type AssembledDocument } from "@/lib/render/agreement";
 import { executeAgreement, SIGNATURES_BUCKET, TransitionRefused } from "@/lib/agreements/lifecycle";
@@ -17,6 +17,20 @@ import { verifyBiometricSignature, type VerifiedAssertion } from "@/lib/webauthn
  * on every request — because the database policy layer deliberately has nothing to
  * say about it. RLS answers "who is this user"; there is no user.
  */
+
+/**
+ * Which side of the instrument acted, for the audit chain.
+ *
+ * A participant is recorded as a participant rather than folded into `borrower`.
+ * A twelve-person booking whose trail reads as twelve borrowers describes a boat
+ * that was lent to twelve people, which is not what happened and is exactly the
+ * kind of thing the chain exists to be precise about.
+ */
+function actorFor(role: string): AuditActor {
+  if (role === "lender") return "lender";
+  if (role === "participant") return "participant";
+  return "borrower";
+}
 
 export class InvalidLink extends Error {
   constructor(readonly reason: "unknown" | "expired" | "used" | "closed" | "done") {
@@ -117,7 +131,7 @@ export async function resolveSigningSession(
       agreementId: signer.agreement_id,
       signerId: signer.id,
       type: "opened",
-      actor: signer.role === "lender" ? "lender" : "borrower",
+      actor: actorFor(signer.role),
       payload: { channel: "email" },
       context: options.touch,
     });
@@ -209,6 +223,7 @@ export async function recordSignature(
     agreementId: session.agreementId,
     phase: "sign",
     signerId: session.signerId,
+    signerRole: session.role,
     attestations: input.attestations,
   });
 
@@ -216,7 +231,7 @@ export async function recordSignature(
     agreementId: session.agreementId,
     signerId: session.signerId,
     type: "compliance_checked",
-    actor: "borrower",
+    actor: actorFor(session.role),
     payload: {
       phase: "sign",
       passed: gate.ok,
@@ -249,7 +264,7 @@ export async function recordSignature(
     agreementId: session.agreementId,
     signerId: session.signerId,
     type: "consented",
-    actor: session.role === "lender" ? "lender" : "borrower",
+    actor: actorFor(session.role),
     payload: { consent_text_hash: session.consentTextHash },
     context: input.context,
   });
@@ -323,7 +338,7 @@ export async function recordSignature(
     agreementId: session.agreementId,
     signerId: session.signerId,
     type: "signed",
-    actor: session.role === "lender" ? "lender" : "borrower",
+    actor: actorFor(session.role),
     payload: {
       method: input.method,
       document_hash_at_signing: session.document.documentHash,

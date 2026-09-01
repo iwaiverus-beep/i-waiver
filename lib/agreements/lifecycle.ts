@@ -78,10 +78,18 @@ export async function sendAgreement(
     .eq("agreement_id", agreementId);
 
   const lender = signers?.find((s) => s.role === "lender");
-  const borrower = signers?.find((s) => s.role === "borrower");
+  // Borrower on a loan, participant on a release: the single counterparty of a
+  // two-party instrument either way, and the rest of this function does not care
+  // which — only the email that carries the link does.
+  const borrower = signers?.find(
+    (s) => s.role === "borrower" || s.role === "participant",
+  );
   if (!lender || !borrower) {
-    throw new TransitionRefused("Add both a lender and a borrower before sending.");
+    throw new TransitionRefused(
+      "Add both a lender and somebody to sign before sending.",
+    );
   }
+  const participantRelease = borrower.role === "participant";
   for (const signer of [lender, borrower]) {
     if (!signer.email) {
       throw new TransitionRefused(
@@ -216,11 +224,12 @@ export async function sendAgreement(
       context,
     });
 
-    // Only the borrower is emailed. The lender is standing in the app that just
+    // Only the other side is emailed. The lender is standing in the app that just
     // sent it, and mailing them a link to click would be theatre.
     let delivered = false;
-    if (signer.role === "borrower") {
+    if (signer.role !== "lender") {
       const message = signingInvitation({
+        participant: participantRelease,
         borrowerName: signer.display_name,
         lenderName: lender.display_name,
         assetDescription: document.mergeValues.asset_description,
