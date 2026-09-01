@@ -66,7 +66,7 @@ export async function middleware(request: NextRequest) {
     const login = request.nextUrl.clone();
     login.pathname = "/login";
     login.searchParams.set("next", path);
-    return NextResponse.redirect(login);
+    return redirectKeepingCookies(login, response);
   }
 
   if (path === "/login" && user) {
@@ -79,10 +79,40 @@ export async function middleware(request: NextRequest) {
     destination.pathname =
       next && next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard";
     destination.search = "";
-    return NextResponse.redirect(destination);
+    return redirectKeepingCookies(destination, response);
   }
 
   return response;
+}
+
+/**
+ * A redirect that carries the cookies the session refresh just wrote.
+ *
+ * THE BUG THIS FIXES, because it is not obvious and it cost a real sign-in loop.
+ *
+ * `getUser()` above does not merely read the session — when the access token has
+ * expired it refreshes it, and the refreshed tokens are handed back through the
+ * `setAll` callback, which writes them onto `response`. Supabase rotates the
+ * refresh token when it does this, so the one in the browser is now spent.
+ *
+ * `NextResponse.redirect()` builds a NEW response. Every cookie `setAll` just
+ * wrote is on the old one, so returning a bare redirect throws the new session
+ * away and leaves the browser holding a refresh token that has already been
+ * used. The next request refreshes again from a spent token, fails, and bounces
+ * to /login; a later request that happens not to redirect finally lands the
+ * cookies and everything works. From outside that reads exactly as reported —
+ * signing in loops a few times and then succeeds.
+ *
+ * So any response this file returns must carry the cookie writes forward. There
+ * is no path here that may return a plain `NextResponse.redirect`.
+ */
+function redirectKeepingCookies(
+  destination: URL,
+  carrier: NextResponse,
+): NextResponse {
+  const redirect = NextResponse.redirect(destination);
+  for (const cookie of carrier.cookies.getAll()) redirect.cookies.set(cookie);
+  return redirect;
 }
 
 export const config = {

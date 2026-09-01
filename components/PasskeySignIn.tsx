@@ -63,10 +63,26 @@ export function PasskeySignIn({ next }: { next: string }) {
       router.push(next);
       router.refresh();
     } catch (caught) {
-      const message = (caught as Error).message ?? "";
+      const error = caught as Error;
+      const message = error.message ?? "";
+
+      // Match on NAME, not message. WebAuthn's NotAllowedError says "The
+      // operation either timed out or was not allowed. See: https://www.w3.org/
+      // TR/webauthn-2/#sctn-privacy-considerations-client." — which does not
+      // contain the string "NotAllowed" (it is "not allowed", with a space), so
+      // testing the message let the spec URL through to the sign-in page.
+      //
+      // That error is also the ordinary case, not a fault: it is what the
+      // browser says when somebody dismisses the prompt, lets it time out, or
+      // has no passkey for this site. None of those deserve red text, and the
+      // privacy note in the spec is the reason they are indistinguishable —
+      // saying which would tell a hostile page whether an account exists.
+      const cancelled =
+        error.name === "NotAllowedError" || error.name === "AbortError";
+
       setError(
-        /NotAllowed|abort/i.test(message)
-          ? "Cancelled."
+        cancelled
+          ? null
           : /not recognised/i.test(message)
             ? "No passkey on this device matches an account here. Sign in another way, then add one."
             : message || "That did not work.",
