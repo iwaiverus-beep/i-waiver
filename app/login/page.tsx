@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { AuthForm } from "@/components/AuthForm";
 import { OAuthButtons } from "@/components/OAuthButtons";
+import { PasskeySignIn } from "@/components/PasskeySignIn";
 import { Container } from "@/components/ui";
 import { configurationProblems } from "@/lib/env";
 
@@ -45,6 +46,7 @@ export default async function LoginPage({
                 {error}
               </p>
             )}
+            <PasskeySignIn next={destination} />
             <OAuthButtons next={destination} />
             <AuthForm next={destination} />
           </div>

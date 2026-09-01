@@ -45,7 +45,8 @@ export async function middleware(request: NextRequest) {
     path.startsWith("/dashboard") ||
     path.startsWith("/agreements") ||
     path.startsWith("/assets") ||
-    path.startsWith("/contacts");
+    path.startsWith("/contacts") ||
+    path.startsWith("/account");
 
   if (isLenderArea && !user) {
     const login = request.nextUrl.clone();
@@ -70,6 +71,7 @@ export const config = {
     "/agreements/:path*",
     "/assets/:path*",
     "/contacts/:path*",
+    "/account/:path*",
     "/login",
   ],
 };
