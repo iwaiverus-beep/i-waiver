@@ -21,6 +21,14 @@ import { useState } from "react";
 const input =
   "w-full rounded-xl border border-line bg-paper px-4 py-3 text-sm text-ink outline-none transition-colors placeholder:text-ink-muted focus:border-ink/40";
 
+/** A datetime-local value as a UTC instant, or null when it was left blank. */
+function asInstant(value: FormDataEntryValue | null): string | null {
+  const wallClock = typeof value === "string" ? value.trim() : "";
+  if (!wallClock) return null;
+  const instant = new Date(wallClock);
+  return Number.isNaN(instant.getTime()) ? null : instant.toISOString();
+}
+
 export function StartRequestForm({ slug, lender }: { slug: string; lender: string }) {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -56,8 +64,13 @@ export function StartRequestForm({ slug, lender }: { slug: string; lender: strin
           borrower_name: form.get("borrower_name"),
           borrower_email: form.get("borrower_email"),
           borrower_phone: form.get("borrower_phone"),
-          starts_at: form.get("starts_at") || null,
-          ends_at: form.get("ends_at") || null,
+          // Sent as instants, not as the raw "2026-09-01T09:41" the input holds.
+          // That string carries no zone, so Postgres reads it as UTC and a
+          // borrower asking for 9am gets a request for 5am. Read here in the
+          // borrower's own zone, which is the right one: they are standing at
+          // the shop, in the state the activity happens in.
+          starts_at: asInstant(form.get("starts_at")),
+          ends_at: asInstant(form.get("ends_at")),
           note: form.get("note") || null,
         }),
       });

@@ -1,8 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { formatCents, toLocalInputValue } from "@/lib/format";
+import {
+  formatCents,
+  timeZoneFor,
+  utcToZonedInput,
+  zonedInputToUtc,
+  zoneAbbreviation,
+} from "@/lib/format";
 import { DeviceContactPicker } from "./DeviceContactPicker";
 import type { Asset } from "./AssetsManager";
 import type { Contact } from "./ContactsManager";
@@ -56,20 +62,44 @@ export function NewAgreementForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const now = new Date();
-  // The borrower's dates when they gave them, ours when they did not. They chose
-  // a window on their own phone; overwriting it with a default would quietly
-  // discard the one piece of the request only they could supply.
-  const defaultStart = prefill?.startsAt
-    ? new Date(prefill.startsAt)
-    : new Date(now.getTime() + 60 * 60 * 1000);
-  const defaultEnd = prefill?.endsAt
-    ? new Date(prefill.endsAt)
-    : new Date(now.getTime() + 9 * 60 * 60 * 1000);
-
   const [state, setState] = useState(
     prefill?.jurisdiction ?? states[0]?.state ?? "FL",
   );
+
+  // The clock this window is written in. The state of activity decides it, not
+  // the desk the form is filled in at: the jet ski is in Florida whoever is
+  // arranging the loan, and the document says Florida time.
+  const timeZone = timeZoneFor(state);
+  const zoneLabel = zoneAbbreviation(timeZone);
+
+  // Held as the wall clock the inputs display, not as instants. Changing the
+  // state must not drag the numbers around — someone who typed 9am meant 9am,
+  // and switching FL to TX makes that 9am Central, not 8am Central.
+  const [window, setWindow] = useState({ starts: "", ends: "" });
+
+  // Seeded on mount rather than at render. This component is server-rendered
+  // first, where `new Date()` is the deploy's clock — UTC on Vercel — and an
+  // uncontrolled defaultValue computed there survives hydration. That is the
+  // bug where the picker opened several hours off.
+  useEffect(() => {
+    const now = Date.now();
+    // The borrower's dates when they gave them, ours when they did not. They chose
+    // a window on their own phone; overwriting it with a default would quietly
+    // discard the one piece of the request only they could supply.
+    setWindow({
+      starts: utcToZonedInput(
+        prefill?.startsAt ? new Date(prefill.startsAt) : new Date(now + 60 * 60 * 1000),
+        timeZone,
+      ),
+      ends: utcToZonedInput(
+        prefill?.endsAt ? new Date(prefill.endsAt) : new Date(now + 9 * 60 * 60 * 1000),
+        timeZone,
+      ),
+    });
+    // Deliberately mount-only. Re-running on a state change would recompute
+    // "an hour from now" and throw away whatever had been typed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Ticked items from the saved list, in the order they were ticked — that
   // order becomes Schedule A on the document, so it is a list and not a Set.
@@ -139,8 +169,11 @@ export function NewAgreementForm({
     const payload = {
       borrower_name: borrowerName,
       borrower_email: borrowerEmail,
-      starts_at: new Date(String(form.get("starts_at"))).toISOString(),
-      ends_at: new Date(String(form.get("ends_at"))).toISOString(),
+      // Read in the activity's zone, not the browser's, so the instant stored
+      // is the one the document will go on to print.
+      starts_at: zonedInputToUtc(window.starts, timeZone).toISOString(),
+      ends_at: zonedInputToUtc(window.ends, timeZone).toISOString(),
+      time_zone: timeZone,
       jurisdiction: form.get("jurisdiction"),
       activity_class: form.get("activity_class"),
       asset_ids: pickedIds,
@@ -455,22 +488,26 @@ export function NewAgreementForm({
         />
 
         <div className="grid gap-5 sm:grid-cols-2">
-          <Field label="From">
+          <Field label={zoneLabel ? `From (${zoneLabel})` : "From"}>
             <input
               name="starts_at"
               type="datetime-local"
               required
-              defaultValue={toLocalInputValue(defaultStart)}
+              value={window.starts}
+              onChange={(e) =>
+                setWindow((w) => ({ ...w, starts: e.target.value }))
+              }
               className={input}
             />
           </Field>
 
-          <Field label="Until">
+          <Field label={zoneLabel ? `Until (${zoneLabel})` : "Until"}>
             <input
               name="ends_at"
               type="datetime-local"
               required
-              defaultValue={toLocalInputValue(defaultEnd)}
+              value={window.ends}
+              onChange={(e) => setWindow((w) => ({ ...w, ends: e.target.value }))}
               className={input}
             />
           </Field>

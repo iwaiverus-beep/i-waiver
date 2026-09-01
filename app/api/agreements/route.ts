@@ -8,7 +8,7 @@ import {
 } from "@/lib/agreements/access";
 import { EMAIL_PATTERN, jsonError, readJson, text } from "@/lib/http";
 import { TransitionRefused } from "@/lib/agreements/lifecycle";
-import { parseDollarsToCents } from "@/lib/format";
+import { parseDollarsToCents, asIanaZone } from "@/lib/format";
 import { markAccepted, requestForActor } from "@/lib/intake/requests";
 
 export const runtime = "nodejs";
@@ -35,6 +35,7 @@ type Body = {
   borrower_email?: unknown;
   lender_name?: unknown;
   starts_at?: unknown;
+  time_zone?: unknown;
   ends_at?: unknown;
   jurisdiction?: unknown;
   activity_class?: unknown;
@@ -61,6 +62,10 @@ export async function POST(request: Request) {
     const startsAt = text(body.starts_at, 40);
     const endsAt = text(body.ends_at, 40);
     const jurisdiction = text(body.jurisdiction, 2)?.toUpperCase() ?? null;
+    // Validated, not trusted. An unknown zone name would be accepted by the
+    // column and then throw inside Intl at render time, which is a broken
+    // document rather than a rejected request.
+    const timeZone = asIanaZone(text(body.time_zone, 64));
     const activityClass = text(body.activity_class, 60) ?? "personal_watercraft";
 
     if (!borrowerName) throw new TransitionRefused("Who is borrowing it?");
@@ -202,6 +207,7 @@ export async function POST(request: Request) {
       activityClass,
       startsAt,
       endsAt,
+      timeZone: timeZone ?? undefined,
       coverRequested: body.cover_requested !== false,
       lender: { userId, name: lenderName, email: lenderEmail },
       borrower: { name: borrowerName, email: borrowerEmail },

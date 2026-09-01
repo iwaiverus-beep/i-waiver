@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { recordAuditEvent, type RequestContext } from "@/lib/audit";
 import { TransitionRefused } from "@/lib/agreements/lifecycle";
+import { timeZoneFor } from "@/lib/format";
 
 /**
  * Creating a draft: the part that must be identical however it was asked for.
@@ -31,6 +32,13 @@ export type DraftInput = {
   activityClass: string;
   startsAt: string;
   endsAt: string;
+  /**
+   * IANA zone the window was written in. Defaulted from the state of activity
+   * by the caller, because the twelve states that straddle a boundary cannot be
+   * resolved from the state alone. Falls back here so a partner posting through
+   * the v1 API without one still gets a defensible zone rather than null.
+   */
+  timeZone?: string;
   coverRequested: boolean;
   lender: {
     /** Null for a partner-managed lender, who has no account here. */
@@ -98,6 +106,7 @@ export async function createDraftAgreement(
       activity_class: input.activityClass,
       starts_at: new Date(input.startsAt).toISOString(),
       ends_at: new Date(input.endsAt).toISOString(),
+      time_zone: input.timeZone ?? timeZoneFor(input.jurisdiction),
       status: "draft",
       cover_requested: input.coverRequested,
       partner_external_ref: input.partnerExternalRef ?? null,

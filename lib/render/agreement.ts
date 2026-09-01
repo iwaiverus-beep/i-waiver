@@ -2,7 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { sha256Hex } from "@/lib/tokens";
-import { formatCents, formatInstant } from "@/lib/format";
+import { formatCents, formatInstant, timeZoneFor } from "@/lib/format";
 
 /**
  * Assembling the document a signer sees.
@@ -56,6 +56,7 @@ export type RenderedClause = {
 export type AgreementFacts = {
   id: string;
   jurisdiction: string;
+  time_zone: string | null;
   activity_class: string;
   starts_at: string;
   ends_at: string;
@@ -198,7 +199,7 @@ export async function assembleAgreement(
   const { data: agreement, error: agreementError } = await db
     .from("agreements")
     .select(
-      "id, jurisdiction, activity_class, starts_at, ends_at, status, cover_requested, executed_at, template_version_id, asset_snapshot, asset_snapshots, asset_id",
+      "id, jurisdiction, time_zone, activity_class, starts_at, ends_at, status, cover_requested, executed_at, template_version_id, asset_snapshot, asset_snapshots, asset_id",
     )
     .eq("id", agreementId)
     .single();
@@ -313,6 +314,12 @@ export async function assembleAgreement(
     );
   }
 
+  // The clock this window was written in. Stored on the agreement since
+  // 20260901000020; the fallback is for rows written before that column and
+  // reproduces exactly what those rows rendered as, so no existing document
+  // changes. No new merge key is introduced — see the note below on hashes.
+  const windowZone = agreement.time_zone ?? timeZoneFor(agreement.jurisdiction);
+
   // A single-item agreement produces EXACTLY the set of merge values it produced
   // before bundles existed — same keys, same strings. The canonical text lists
   // every merge value, so adding a key unconditionally would change the hash of
@@ -328,8 +335,11 @@ export async function assembleAgreement(
     declared_value: formatCents(
       bundled ? totalDeclaredValueCents : asset.declared_value_cents,
     ),
-    starts_at: formatInstant(agreement.starts_at, agreement.jurisdiction),
-    ends_at: formatInstant(agreement.ends_at, agreement.jurisdiction),
+    // The agreement's own zone, falling back to the state's only for rows
+    // written before the column existed. Deriving it here is what made a
+    // Washington loan print Eastern.
+    starts_at: formatInstant(agreement.starts_at, windowZone),
+    ends_at: formatInstant(agreement.ends_at, windowZone),
     jurisdiction: agreement.jurisdiction,
     activity_class: agreement.activity_class.replace(/_/g, " "),
   };
