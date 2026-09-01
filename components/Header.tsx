@@ -20,6 +20,26 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-50 border-b border-line/70 bg-paper/85 backdrop-blur">
+      {/*
+        The account strip, above the masthead and hard right, where a browser-
+        shaped habit goes looking for it. Rendered only once the preview is
+        unlocked — both things inside it are gated, so leaving it in would put an
+        empty ruled band across the top of every public page.
+
+        It is deliberately outside the `md:` breakpoint that hides the main nav:
+        signing out should not require opening a hamburger.
+      */}
+      {unlocked && (
+        <div className="border-b border-line/50">
+          <Container>
+            <div className="flex h-9 items-center justify-end gap-4">
+              <PreviewChip />
+              <AccountLink />
+            </div>
+          </Container>
+        </div>
+      )}
+
       <Container>
         <div className="flex h-16 items-center justify-between">
           {/*
@@ -49,8 +69,6 @@ export function Header() {
                 {item.label}
               </Link>
             ))}
-            {unlocked && <AccountLink />}
-            <PreviewChip />
             <Link
               href="/#waitlist"
               className="rounded-full bg-accent px-5 py-2 text-sm font-semibold text-paper transition-colors hover:bg-accent-hover"
@@ -90,7 +108,11 @@ export function Header() {
                   {item.label}
                 </Link>
               ))}
-              {unlocked && <AccountLink onNavigate={() => setOpen(false)} />}
+              {/*
+                No account link here. The strip above the masthead carries it at
+                every width, so repeating it inside the hamburger would give the
+                same page two sign-out buttons.
+              */}
               <Link
                 href="/#waitlist"
                 onClick={() => setOpen(false)}

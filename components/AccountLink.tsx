@@ -13,7 +13,7 @@ import { browserClient } from "@/lib/supabase/browser";
  * it loads, and nothing behind it is protected by this component — the middleware
  * and the route handlers do that.
  */
-export function AccountLink({ onNavigate }: { onNavigate?: () => void }) {
+export function AccountLink() {
   const [state, setState] = useState<"unknown" | "in" | "out">("unknown");
 
   useEffect(() => {
@@ -46,12 +46,16 @@ export function AccountLink({ onNavigate }: { onNavigate?: () => void }) {
   if (state === "in") {
     return (
       <div className="flex items-center gap-4">
+        {/*
+          Account, not "Your agreements". The three places inside the product are
+          the AppNav's job; this corner is the one people go to looking for
+          themselves — their details, and the way out.
+        */}
         <Link
-          href="/dashboard"
-          onClick={onNavigate}
-          className="text-sm text-ink-soft transition-colors hover:text-ink"
+          href="/account"
+          className="text-sm font-semibold text-ink-soft transition-colors hover:text-ink"
         >
-          Your agreements
+          Account
         </Link>
         <form action="/auth/signout" method="post">
           <button
@@ -68,7 +72,6 @@ export function AccountLink({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <Link
       href="/login"
-      onClick={onNavigate}
       className="text-sm text-ink-soft transition-colors hover:text-ink"
     >
       Sign in
