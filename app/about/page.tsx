@@ -1,3 +1,4 @@
+import { PRIMARY_CTA } from "@/lib/launch";
 import type { Metadata } from "next";
 import {
   Button,
@@ -125,7 +126,7 @@ export default function AboutPage() {
           <h2 className="font-serif text-3xl tracking-tight sm:text-4xl">
             Want to know when your state opens?
           </h2>
-          <Button href="/#waitlist">Request early access</Button>
+          <Button href={PRIMARY_CTA.href}>{PRIMARY_CTA.label}</Button>
         </div>
       </Section>
     </>

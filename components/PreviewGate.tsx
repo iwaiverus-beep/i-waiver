@@ -10,6 +10,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { LIVE } from "@/lib/launch";
 
 /**
  * The preview gate.
@@ -46,11 +47,15 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
   // Always starts locked so that server and first client render agree. The
   // stored value is applied in an effect, which is a frame later but avoids a
   // hydration mismatch on every page of the site.
-  const [unlocked, setUnlocked] = useState(false);
+  //
+  // Once LIVE, it starts unlocked instead — and that is still true on both
+  // renders, so the hydration bargain above holds either way.
+  const [unlocked, setUnlocked] = useState(LIVE);
   const [remaining, setRemaining] = useState(CLICKS_REQUIRED);
   const clicks = useRef<number[]>([]);
 
   useEffect(() => {
+    if (LIVE) return;
     try {
       setUnlocked(window.localStorage.getItem(STORAGE_KEY) === "1");
     } catch {
@@ -110,7 +115,9 @@ export function usePreview(): PreviewState {
 /** Shown once the app is revealed, so nobody mistakes a preview for a launch. */
 export function PreviewChip() {
   const { unlocked, lock } = usePreview();
-  if (!unlocked) return null;
+  // Nothing to warn about when the site is presenting itself as live, and a
+  // chip offering to "hide the app again" would be a puzzle rather than a hint.
+  if (LIVE || !unlocked) return null;
 
   return (
     <button

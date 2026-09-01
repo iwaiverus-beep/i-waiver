@@ -11,6 +11,7 @@ import {
   Section,
 } from "@/components/ui";
 import { WaitlistForm } from "@/components/WaitlistForm";
+import { LIVE, PRIMARY_CTA } from "@/lib/launch";
 import { BRAND } from "@/lib/brand";
 
 export default function HomePage() {
@@ -20,7 +21,7 @@ export default function HomePage() {
       <section className="border-b border-line bg-paper pb-20 pt-20 sm:pb-28 sm:pt-28">
         <Container>
           <div className="max-w-3xl">
-            <Eyebrow>In development</Eyebrow>
+            <Eyebrow>{LIVE ? BRAND.tagline : "In development"}</Eyebrow>
             <H1>
               A handshake is not a record.
               <br />
@@ -34,7 +35,7 @@ export default function HomePage() {
               period built into the same signature.
             </Lede>
             <div className="mt-10 flex flex-wrap gap-4">
-              <Button href="/#waitlist">Request early access</Button>
+              <Button href={PRIMARY_CTA.href}>{PRIMARY_CTA.label}</Button>
               <Button href="/how-it-works" variant="ghost">
                 See how it works
               </Button>
@@ -196,7 +197,36 @@ export default function HomePage() {
         </div>
       </Section>
 
-      {/* Waitlist */}
+      {/*
+        The closing panel, once the site is live. Same slot the waitlist held —
+        a page whose every other section ends in something to do should not
+        finish on a disclosure.
+      */}
+      {LIVE && (
+        <section className="border-t border-line bg-surface py-20 sm:py-28">
+          <Container>
+            <div className="max-w-prose">
+              <Eyebrow>Get started</Eyebrow>
+              <H2>Write the first one in a couple of minutes.</H2>
+              <p className="mt-6 leading-relaxed text-ink-soft">
+                Describe what you are lending, say who is borrowing it and for how
+                long, and send it. They sign from a link on their phone — no
+                account, no app, nothing to download. You keep the signed
+                agreement and so do they.
+              </p>
+              <div className="mt-10 flex flex-wrap gap-4">
+                <Button href={PRIMARY_CTA.href}>{PRIMARY_CTA.label}</Button>
+                <Button href="/how-it-works" variant="ghost">
+                  See how it works
+                </Button>
+              </div>
+            </div>
+          </Container>
+        </section>
+      )}
+
+      {/* Waitlist — the other face of the slot above. See lib/launch.ts. */}
+      {!LIVE && (
       <section id="waitlist" className="scroll-mt-20 border-t border-line bg-surface py-20 sm:py-28">
         <Container>
           <div className="grid gap-12 lg:grid-cols-[1fr_1.15fr] lg:gap-20">
@@ -221,6 +251,7 @@ export default function HomePage() {
           </div>
         </Container>
       </section>
+      )}
     </>
   );
 }

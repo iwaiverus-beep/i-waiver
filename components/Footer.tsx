@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { BRAND } from "@/lib/brand";
+import { LIVE, PRIMARY_CTA } from "@/lib/launch";
 import { Container } from "./ui";
 
 export function Footer() {
@@ -27,7 +28,7 @@ export function Footer() {
             heading="Company"
             links={[
               { href: "/about", label: "About" },
-              { href: "/#waitlist", label: "Request early access" },
+              { href: PRIMARY_CTA.href, label: PRIMARY_CTA.label },
             ]}
           />
           <FooterCol
@@ -41,7 +42,15 @@ export function Footer() {
 
         <div className="mt-14 border-t border-line pt-8">
           <p className="max-w-3xl text-xs leading-relaxed text-ink-muted">
-            {BRAND.name} is in development and is not yet accepting customers.
+            {/*
+              Only the first clause moves with LIVE, and only because a site
+              inviting people to get started while saying it is not accepting
+              customers contradicts itself. Every sentence after it is a
+              compliance statement about INSURANCE, which is a separate question
+              from whether the agreements product is open — cover is still not
+              being offered or solicited, so none of it is conditional.
+            */}
+            {!LIVE && `${BRAND.name} is in development and is not yet accepting customers. `}
             Nothing on this site is an offer to sell, or a solicitation to buy,
             any insurance product. Availability of any coverage described here
             depends on the issuing carrier, on state approval, and on

@@ -1,3 +1,4 @@
+import { PRIMARY_CTA } from "@/lib/launch";
 import type { Metadata } from "next";
 import {
   Button,
@@ -133,7 +134,7 @@ export default function BusinessesPage() {
       <Section tone="surface">
         <div className="flex flex-wrap items-center justify-between gap-6">
           <H2>Run somewhere that takes waivers?</H2>
-          <Button href="/#waitlist">Request early access</Button>
+          <Button href={PRIMARY_CTA.href}>{PRIMARY_CTA.label}</Button>
         </div>
       </Section>
     </>

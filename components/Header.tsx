@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { BRAND } from "@/lib/brand";
+import { PRIMARY_CTA } from "@/lib/launch";
 import { Container } from "./ui";
 import { AccountLink } from "./AccountLink";
 import { PreviewChip, usePreview } from "./PreviewGate";
@@ -70,10 +71,10 @@ export function Header() {
               </Link>
             ))}
             <Link
-              href="/#waitlist"
+              href={PRIMARY_CTA.href}
               className="rounded-full bg-accent px-5 py-2 text-sm font-semibold text-paper transition-colors hover:bg-accent-hover"
             >
-              Request early access
+              {PRIMARY_CTA.label}
             </Link>
           </nav>
 
@@ -114,11 +115,11 @@ export function Header() {
                 same page two sign-out buttons.
               */}
               <Link
-                href="/#waitlist"
+                href={PRIMARY_CTA.href}
                 onClick={() => setOpen(false)}
                 className="text-sm font-semibold text-accent"
               >
-                Request early access
+                {PRIMARY_CTA.label}
               </Link>
             </nav>
           </div>

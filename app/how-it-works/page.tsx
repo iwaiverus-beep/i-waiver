@@ -1,3 +1,4 @@
+import { PRIMARY_CTA } from "@/lib/launch";
 import type { Metadata } from "next";
 import {
   Button,
@@ -123,7 +124,7 @@ export default function HowItWorksPage() {
       <Section>
         <div className="flex flex-wrap items-center justify-between gap-6">
           <H2>Want it in your state?</H2>
-          <Button href="/#waitlist">Request early access</Button>
+          <Button href={PRIMARY_CTA.href}>{PRIMARY_CTA.label}</Button>
         </div>
       </Section>
     </>
