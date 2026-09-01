@@ -1,5 +1,21 @@
 -- Assets belong to originators, not to people.
 --
+-- RENUMBERED, and not for tidiness. This was written as 20260901000010 and so was
+-- `_passkeys`. `scripts/db-push.mjs` identifies a migration by the digits before
+-- the first underscore, so two files sharing a prefix are one migration as far as
+-- the runner is concerned: `_passkeys` sorted first, ran, and was recorded as
+-- version 20260901000010 — and this file became permanently invisible. It had to
+-- be applied by hand, and a database rebuilt from these files would have skipped
+-- it silently and then failed several migrations later on a column that never got
+-- added.
+--
+-- 27 rather than a number next to 10, because the order still has to be right and
+-- there was no free slot there. It is safe here: nothing between 11 and 26 reads
+-- `owner_originator_id`, nothing after 9 reads the `owner_user_id` this drops, and
+-- the two migrations that do need the new column — `_asset_merchandising` and
+-- `_asset_offers` — are 28 and 29. `db-push.mjs` now refuses to run at all when
+-- two files share a version, so this cannot happen a third time.
+--
 -- An organisation could already originate an agreement — `agreements.originator_id`
 -- has pointed at `originators` since the initial schema — but the thing being lent
 -- still had to be owned by an individual's profile. A rental shop's fleet therefore

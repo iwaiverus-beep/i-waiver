@@ -135,6 +135,43 @@ async function main() {
     .filter((f) => f.endsWith(".sql"))
     .sort();
 
+  // --- Two files, one version ----------------------------------------------
+  //
+  // A migration is identified by the digits before its first underscore, here and
+  // in `schema_migrations`. So two files sharing a prefix are not two migrations
+  // that both run — they are one migration, and it is whichever sorts first. The
+  // other is recorded as applied without ever having been executed, and stays
+  // invisible for good.
+  //
+  // That is a silent wrong answer, which is the worst kind: the run says "Done",
+  // the database is missing a table or a column, and it surfaces days later as a
+  // migration failing on something that was never created. It happened twice in
+  // this repo — 20260901000010 (`_passkeys` won, `_asset_owner_originator` had to
+  // be applied by hand and renumbered to 27) and again at 24, 25 and 26 while two
+  // features were being written the same afternoon.
+  //
+  // So: stop. Renaming a file that has not been applied costs nothing, and there
+  // is no way to guess which of the two the author meant to run first.
+  const byVersion = new Map();
+  for (const file of files) {
+    const version = file.split("_")[0];
+    byVersion.set(version, [...(byVersion.get(version) ?? []), file]);
+  }
+
+  const collisions = [...byVersion.entries()].filter(([, group]) => group.length > 1);
+  if (collisions.length > 0) {
+    die(
+      `two migrations share a version number:\n\n` +
+        collisions
+          .map(([version, group]) => `  ${version}\n${group.map((f) => `    ${f}`).join("\n")}`)
+          .join("\n\n"),
+      "Only the first of each pair would ever run, and the second would be\n" +
+        "recorded as applied without executing. Renumber the one that has NOT\n" +
+        "been applied yet — take a number nothing else in the folder claims —\n" +
+        "and re-run.",
+    );
+  }
+
   const pending = files.filter((f) => !applied.has(f.split("_")[0]));
 
   console.log(
