@@ -43,6 +43,18 @@ alter table assets
 -- table is a read of the un-archived list.
 drop index if exists assets_owner_idx;
 
+-- The policy has to go BEFORE the column it reads. `assets_owner_all` from
+-- 20260829000002 is defined as `owner_user_id = auth.uid()`, and Postgres
+-- refuses to drop a column an existing policy depends on:
+--
+--   2BP01: cannot drop column owner_user_id of table assets because other
+--          objects depend on it
+--
+-- It is recreated against `owner_originator_id` at the foot of this file. The
+-- window between the two is inside the migration's own transaction, so there is
+-- no moment at which this table is readable without a policy.
+drop policy if exists assets_owner_all on assets;
+
 alter table assets
   drop column owner_user_id;
 

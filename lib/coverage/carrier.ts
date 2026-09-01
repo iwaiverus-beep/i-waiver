@@ -208,9 +208,47 @@ export class MockCarrier implements CarrierClient {
   }
 }
 
-let client: CarrierClient | null = null;
+export class UnknownCarrierAdapter extends Error {
+  constructor(readonly adapter: string) {
+    super(
+      `No CarrierClient is registered for adapter "${adapter}". Add it to ADAPTERS in lib/coverage/carrier.ts.`,
+    );
+  }
+}
 
-export function carrierClient(): CarrierClient {
-  if (!client) client = new MockCarrier();
+/**
+ * The registry. `carriers.adapter` names one of these keys.
+ *
+ * There is no default and no fallback, on purpose. Before 20260901000018 this
+ * function returned a MockCarrier singleton, which was honest when there was
+ * exactly one carrier and it was the mock. It stops being honest the moment a
+ * real carrier has a row: falling back would put `MOCK-` policy numbers under a
+ * real insurer's name and tell a customer they were covered. An unregistered
+ * adapter throws, and lib/coverage/carriers.ts drops that carrier from the quote
+ * with a loud log line rather than substituting anything.
+ *
+ * Adding a real carrier is: write a second `CarrierClient`, register it here, and
+ * set `carriers.adapter` to its key. Nothing else changes.
+ */
+const ADAPTERS: Record<string, () => CarrierClient> = {
+  mock: () => new MockCarrier(),
+};
+
+const instances = new Map<string, CarrierClient>();
+
+export function carrierClient(adapter: string): CarrierClient {
+  const existing = instances.get(adapter);
+  if (existing) return existing;
+
+  const factory = ADAPTERS[adapter];
+  if (!factory) throw new UnknownCarrierAdapter(adapter);
+
+  const client = factory();
+  instances.set(adapter, client);
   return client;
+}
+
+/** Which adapters have an implementation. Used by the admin console. */
+export function registeredAdapters(): string[] {
+  return Object.keys(ADAPTERS);
 }

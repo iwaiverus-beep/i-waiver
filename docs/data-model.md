@@ -549,6 +549,49 @@ above described a partner nobody could become:
 (`20260901000013`), and `public.purge_sandbox_coverage` empties the sandbox with every
 statement filtered on it. See `docs/partners.md` for the operating model.
 
+### Lenders a partner administers — added 20260901000019
+
+Three kinds of lender, which are two kinds of party arriving by different routes:
+
+| | party | administered by |
+|---|---|---|
+| individual | `originators.user_id` | themselves |
+| company | `originators.org_id` | its own staff |
+| partner-integrated | `originators.org_id` | a partner platform, over the API |
+
+`originators` keeps exactly two arms. What is added is **provenance** —
+`managed_by_partner_id`, `partner_external_ref`, and a derived `channel` — because
+the platform is not the lender and is not a party to the release. A constraint
+requires a partner-managed originator to be an organization: `user_id` points at
+`auth.users`, and a partner cannot create somebody else's account.
+
+`partner_integrations.scopes` (`coverage` | `agreements`) decides which door a key
+opens, defaulting to `coverage` alone. `agreements.partner_external_ref` makes the
+partner's create idempotent.
+
+### `carriers` — added 20260901000018
+
+The original draft had no carrier in it at all. `state_availability.carrier_admitted`
+was a single boolean, which encoded an assumption nobody had written down: exactly one
+carrier, forever, anonymous. A second carrier — one admitted in FL, another writing TX —
+could not be expressed, and `quotes.product_code` could not be traced back to whoever
+priced it.
+
+| table | notes |
+|---|---|
+| `carriers` | name, NAIC, kind, status, and `adapter` — the key naming its `CarrierClient` |
+| `carrier_products` | `product_code` is globally unique, because `quotes.product_code` is a snapshot with no FK |
+| `carrier_state_filings` | (product, state). **Replaces `carrier_admitted`**, which is now a trigger-maintained cache |
+| `carrier_credentials` | outbound: the NAME of the env var holding their key, never the key. Inbound: a hash |
+| `carrier_events` | what they told us after a bind. Immutable except for processing state |
+
+`quotes.carrier_id` and `policies.carrier_id` are new and nullable — null means a row
+written before carriers existed, when there was one anonymous carrier.
+
+**A carrier is not a partner.** `partners` models somebody who calls US and holds an
+inbound key; a carrier is called BY us. Approving a carrier-kind application creates a
+`carriers` row, not a partner. See `docs/partners.md`.
+
 Empty `allowed_jurisdictions` means "no restriction" to `lib/coverage/service.ts` —
 a reasonable reading when partners were created by hand, and a bad one now that an
 approval flow creates them. Rather than reinterpret the coverage service's semantics

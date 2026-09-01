@@ -31,6 +31,10 @@ export type StaffCapability =
   | "partners.key.live"
   /** Approve a partner's co-branding before it renders on our surface. */
   | "branding.review"
+  /** Add a carrier, its products, and its credentials. */
+  | "carriers.manage"
+  /** Record that a product is filed in a state. A legal fact, not a commercial one. */
+  | "carriers.filings"
   /** Empty a partner's sandbox. */
   | "sandbox.purge"
   /** Read and reply to support tickets. */
@@ -52,6 +56,8 @@ const CAPABILITIES: Record<StaffRole, StaffCapability[]> = {
     "partners.key.sandbox",
     "partners.key.live",
     "branding.review",
+    "carriers.manage",
+    "carriers.filings",
     "sandbox.purge",
     "support.respond",
     "support.triage",
@@ -71,9 +77,19 @@ const CAPABILITIES: Record<StaffRole, StaffCapability[]> = {
     "console.read",
   ],
   support: ["support.respond", "support.triage", "console.read"],
-  // States and clause sets are a legal judgement, not an operational one, so the
-  // person who makes it does not also run the commercial pipeline.
-  compliance: ["compliance.states", "support.respond", "console.read"],
+  // States, filings and clause sets are a legal judgement, not an operational
+  // one, so the person who makes it does not also run the commercial pipeline.
+  //
+  // `carriers.filings` sits here and NOT on admin, deliberately. Recording that a
+  // product is filed in a state is a claim about a regulator's decision, and it
+  // is the only input to whether a live quote may be given there — an operator
+  // under pressure to open a state should not be able to assert it themselves.
+  compliance: [
+    "carriers.filings",
+    "compliance.states",
+    "support.respond",
+    "console.read",
+  ],
   read_only: ["console.read"],
 };
 
@@ -87,11 +103,12 @@ export const STAFF_ROLE_LABELS: Record<StaffRole, string> = {
 
 export const STAFF_ROLE_DESCRIPTIONS: Record<StaffRole, string> = {
   super_admin:
-    "Everything, including granting staff access and issuing live keys.",
+    "Everything, including granting staff access, issuing live keys and adding carriers.",
   admin:
-    "Approves partners, runs onboarding, issues sandbox keys. Cannot put a partner live.",
+    "Approves partners, runs onboarding, issues sandbox keys. Cannot put a partner live or record a filing.",
   support: "Answers tickets. Reads accounts; changes nothing about them.",
-  compliance: "Opens and closes states, and signs off clause sets.",
+  compliance:
+    "Records carrier filings, opens and closes states, and signs off clause sets.",
   read_only: "Sees the console. Changes nothing.",
 };
 

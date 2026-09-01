@@ -3,6 +3,7 @@ import { jsonError, readJson, text } from "@/lib/http";
 import { requireStaff } from "@/lib/platform/access";
 import {
   approveApplication,
+  approveCarrierApplication,
   declineApplication,
 } from "@/lib/partners/applications";
 
@@ -30,6 +31,14 @@ export async function POST(
 
     if (action === "approve") {
       const result = await approveApplication(staff, id, { note });
+      return NextResponse.json({ ok: true, ...result });
+    }
+
+    // A carrier is not a partner — see the note in lib/partners/applications.ts.
+    // Approving one opens a `carriers` row and issues nothing, because what
+    // happens next is a contract and a filing, not an API key.
+    if (action === "approve_carrier") {
+      const result = await approveCarrierApplication(staff, id, { note });
       return NextResponse.json({ ok: true, ...result });
     }
 

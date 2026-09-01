@@ -18,10 +18,13 @@ export function ApplicationDecision({
   applicationId,
   status,
   canDecide,
+  isCarrier,
 }: {
   applicationId: string;
   status: string;
   canDecide: boolean;
+  /** A carrier or MGA. Approving one opens a carrier record, not a partner. */
+  isCarrier: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -37,10 +40,14 @@ export function ApplicationDecision({
     );
   }
 
-  if (status === "approved" || status === "declined" || status === "withdrawn") {
+  // Anything that is not still open is settled. Written as an allow-list so a new
+  // status — `approved_as_carrier` was exactly that — does not silently become a
+  // decidable state again.
+  if (status !== "new" && status !== "in_review") {
     return (
       <p className="text-sm text-ink-muted">
-        Already {status}. Changing that is a conversation, not a button.
+        Already {status.replace(/_/g, " ")}. Changing that is a conversation, not a
+        button.
       </p>
     );
   }
@@ -49,7 +56,12 @@ export function ApplicationDecision({
     setBusy(true);
     setError(null);
     const result = await send(`/api/admin/applications/${applicationId}`, {
-      body: { action, note: note || null },
+      body: {
+        // A carrier is approved onto a different table entirely — it needs
+        // outbound credentials and filings, not an inbound API key.
+        action: action === "approve" && isCarrier ? "approve_carrier" : action,
+        note: note || null,
+      },
     });
     setBusy(false);
     if (!result.ok) {
@@ -88,7 +100,11 @@ export function ApplicationDecision({
               disabled={busy}
               className="rounded-full bg-accent px-5 py-2.5 text-sm font-semibold text-paper disabled:opacity-60"
             >
-              {busy ? "Working…" : "Yes — create the partner"}
+              {busy
+                ? "Working…"
+                : isCarrier
+                  ? "Yes — open a carrier record"
+                  : "Yes — create the partner"}
             </button>
             <button
               type="button"
@@ -152,9 +168,9 @@ export function ApplicationDecision({
       </div>
 
       <p className="text-xs leading-relaxed text-ink-muted">
-        Approving creates the partner, makes the contact an owner, and emails them
-        a sign-in link. It does not issue any key — they mint their own sandbox
-        key, and a live key comes later, from the partner page.
+        {isCarrier
+          ? "This is a carrier, not a distribution partner — we call them, they do not call us. Approving opens a carrier record as a prospect and issues nothing: no account, no key, no email. What happens next is a contract, then filings, then somebody writes an adapter."
+          : "Approving creates the partner, makes the contact an owner, and emails them a sign-in link. It does not issue any key — they mint their own sandbox key, and a live key comes later, from the partner page."}
       </p>
 
       {error && (

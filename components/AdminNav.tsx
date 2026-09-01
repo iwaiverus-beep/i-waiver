@@ -13,6 +13,10 @@ import { STAFF_ROLE_LABELS, type StaffRole } from "@/lib/platform/roles";
  */
 const LINKS = [
   { href: "/admin", label: "Queues" },
+  // Carriers get their own tab rather than sitting under partners. They are the
+  // other side of the coverage boundary — we call them — and a console that
+  // listed them together would assert the two are the same relationship.
+  { href: "/admin/carriers", label: "Carriers" },
   { href: "/admin/support", label: "Support" },
   { href: "/admin/staff", label: "Staff" },
 ];

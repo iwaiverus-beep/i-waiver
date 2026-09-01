@@ -119,6 +119,9 @@ export function LiveKeyIssuer({
   const router = useRouter();
   const [states, setStates] = useState<string[]>(suggestedStates);
   const [kind, setKind] = useState("widget");
+  // Never on by default. Granting `agreements` lets a platform create a release
+  // in a third party's name and send it to a signer.
+  const [agreementsScope, setAgreementsScope] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fresh, setFresh] = useState<string | null>(null);
@@ -155,7 +158,14 @@ export function LiveKeyIssuer({
     setError(null);
     const result = await send<{ key: string }>(
       `/api/admin/partners/${partnerId}/keys`,
-      { body: { environment: "live", integration_kind: kind, jurisdictions: states } },
+      {
+        body: {
+          environment: "live",
+          integration_kind: kind,
+          jurisdictions: states,
+          scopes: agreementsScope ? ["coverage", "agreements"] : ["coverage"],
+        },
+      },
     );
     setBusy(false);
     if (!result.ok) {
@@ -215,6 +225,27 @@ export function LiveKeyIssuer({
             );
           })}
         </div>
+      </div>
+
+      <div className="rounded-xl border border-line p-4">
+        <label className="flex items-start gap-2.5 text-sm text-ink">
+          <input
+            type="checkbox"
+            checked={agreementsScope}
+            onChange={(e) => setAgreementsScope(e.target.checked)}
+            className="mt-0.5 h-4 w-4 accent-accent"
+          />
+          <span>
+            Also open the <strong className="font-semibold">agreements API</strong>
+            <span className="mt-1 block text-xs leading-relaxed text-ink-muted">
+              Lets this platform register its own customers as lenders and
+              originate a release in their name, which we then send to a signer.
+              A much larger power than pricing cover, so it is off unless they
+              asked for it and somebody agreed. The signing page is still ours, so
+              the insurance offer is still made by us.
+            </span>
+          </span>
+        </label>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">

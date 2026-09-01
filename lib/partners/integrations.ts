@@ -33,6 +33,15 @@ export const INTEGRATION_KIND_NOTES: Record<IntegrationKind, string> = {
     "You send the signer to us and we send them back. Least code, and the customer briefly leaves your product.",
 };
 
+export type ApiScope = "coverage" | "agreements";
+
+export const API_SCOPES: ApiScope[] = ["coverage", "agreements"];
+
+export const API_SCOPE_LABELS: Record<ApiScope, string> = {
+  coverage: "Coverage — quote and bind",
+  agreements: "Agreements — originate on a lender's behalf",
+};
+
 export type Integration = {
   id: string;
   partner_id: string;
@@ -42,6 +51,7 @@ export type Integration = {
   key_prefix: string | null;
   allowed_jurisdictions: string[];
   allowed_origins: string[];
+  scopes: ApiScope[];
   compensation_model: string;
   webhook_url: string | null;
   created_at: string;
@@ -49,15 +59,16 @@ export type Integration = {
   revoked_at: string | null;
 };
 
+const INTEGRATION_COLUMNS =
+  "id, partner_id, integration_kind, environment, label, key_prefix, allowed_jurisdictions, allowed_origins, scopes, compensation_model, webhook_url, created_at, last_used_at, revoked_at";
+
 export async function listIntegrations(
   db: SupabaseClient,
   partnerId: string,
 ): Promise<Integration[]> {
   const { data } = await db
     .from("partner_integrations")
-    .select(
-      "id, partner_id, integration_kind, environment, label, key_prefix, allowed_jurisdictions, allowed_origins, compensation_model, webhook_url, created_at, last_used_at, revoked_at",
-    )
+    .select(INTEGRATION_COLUMNS)
     .eq("partner_id", partnerId)
     .order("created_at", { ascending: false });
 
@@ -81,6 +92,15 @@ export async function issueKey(
     /** Required for live. Ignored for sandbox, which always gets every state. */
     jurisdictions?: string[];
     allowedOrigins?: string[];
+    /**
+     * Which APIs the key opens. Defaults to coverage alone.
+     *
+     * `agreements` lets the holder create a legal instrument in a third party's
+     * name and send it to a signer, which is a much larger power than pricing
+     * cover — so it is never inferred, and the partner console does not pass it.
+     * Only the admin route does, and only when somebody chose it.
+     */
+    scopes?: ApiScope[];
   },
 ): Promise<IssuedKey> {
   const jurisdictions =
@@ -107,11 +127,10 @@ export async function issueKey(
       label: input.label,
       allowed_jurisdictions: jurisdictions,
       allowed_origins: input.allowedOrigins ?? [],
+      scopes: input.scopes?.length ? [...new Set(input.scopes)] : ["coverage"],
       created_by: input.createdBy,
     })
-    .select(
-      "id, partner_id, integration_kind, environment, label, key_prefix, allowed_jurisdictions, allowed_origins, compensation_model, webhook_url, created_at, last_used_at, revoked_at",
-    )
+    .select(INTEGRATION_COLUMNS)
     .single();
 
   if (error || !data) {

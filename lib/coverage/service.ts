@@ -3,6 +3,9 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { serviceClient } from "@/lib/supabase/service";
 import { carrierClient } from "@/lib/coverage/carrier";
+import type { CarrierQuote } from "@/lib/coverage/carrier";
+import { availableProducts, groupByCarrier } from "@/lib/coverage/carriers";
+import type { AvailableProduct } from "@/lib/coverage/carriers";
 import type {
   BindRequest,
   BindResponse,
@@ -105,50 +108,54 @@ function validateContext(request: QuoteRequest, caller: Caller) {
 }
 
 /**
- * Is the carrier actually admitted here?
+ * What may actually be written here, or a refusal.
  *
- * Availability is a fact about the carrier's filings, not about our appetite, so
- * it is checked before a price is ever shown. Quoting in a state the carrier
- * cannot write in produces a number nobody can honour.
+ * Availability is a fact about a carrier's FILINGS, not about our appetite, so it
+ * is checked before a price is ever shown: quoting in a state nobody has filed in
+ * produces a number nobody can honour.
+ *
+ * Before 20260901000018 this asked `state_availability.carrier_admitted`, a
+ * boolean that assumed one anonymous carrier forever. It now asks
+ * `available_carrier_products`, which answers the question that actually matters —
+ * WHO may write WHAT, here, today — and returns enough to route each product to
+ * the client that priced it.
  */
-async function assertStateOpen(
+async function openProducts(
   db: SupabaseClient,
-  state: string,
-  environment: ApiEnvironment,
-) {
-  const { data } = await db
-    .from("state_availability")
-    .select("state, status, carrier_admitted, product_codes")
-    .eq("state", state)
-    .maybeSingle();
+  input: { state: string; activityClass: string; environment: ApiEnvironment },
+): Promise<AvailableProduct[]> {
+  const products = await availableProducts(db, {
+    state: input.state,
+    activityClass: input.activityClass,
+    environment: input.environment,
+  });
 
-  if (!data || !data.carrier_admitted) {
-    // A sandbox call is allowed to quote where we are not admitted, and this is
-    // the one place the two environments genuinely behave differently.
-    //
-    // The reason is that a partner has to be able to finish their integration
-    // before we open their states — otherwise the sequencing is: sign the
-    // contract, wait for a filing, then start building. What they must never get
-    // is a sandbox that lies about live: the response says `sandbox`, every
-    // summary says so in words, and the policy number the mock carrier returns
-    // starts MOCK-. If a partner can mistake this for a real quote, that is a bug
-    // in how it is labelled, not a reason to close the door.
-    if (environment === "sandbox") {
-      return {
-        state,
-        status: "sandbox",
-        carrier_admitted: false,
-        product_codes: data?.product_codes ?? null,
-      };
-    }
+  if (products.length > 0) return products;
 
+  // A sandbox call is allowed to quote where nothing is filed, and this is the
+  // one place the two environments genuinely differ. The reason is that a partner
+  // has to be able to finish their integration before their states open —
+  // otherwise the sequencing is: sign the contract, wait for a filing, then start
+  // building. What they must never get is a sandbox that lies about live: the
+  // response says `sandbox`, every summary says so in words, and the policy
+  // number the mock returns starts MOCK-.
+  //
+  // Reaching here in sandbox means something else is wrong — no mock product
+  // exists for that activity class at all — so the message says so rather than
+  // pretending the state is the problem.
+  if (input.environment === "sandbox") {
     throw new CoverageRejection(
-      `No admitted product in ${state}.`,
+      `Nothing to quote for ${input.activityClass}. The sandbox has no product for that activity class.`,
       422,
-      "carrier_not_admitted",
+      "no_sandbox_product",
     );
   }
-  return data;
+
+  throw new CoverageRejection(
+    `No admitted product for ${input.activityClass} in ${input.state}.`,
+    422,
+    "carrier_not_admitted",
+  );
 }
 
 export async function createQuote(
@@ -160,7 +167,11 @@ export async function createQuote(
   const db = serviceClient();
   const context = request.context;
   const environment = caller.environment;
-  await assertStateOpen(db, context.jurisdiction, environment);
+  const products = await openProducts(db, {
+    state: context.jurisdiction,
+    activityClass: context.activity_class,
+    environment,
+  });
 
   // First-party quotes must carry the reference the schema's check constraint
   // requires. Partner quotes must not: they have no agreement at all.
@@ -209,12 +220,41 @@ export async function createQuote(
       ["physical_damage", "liability", "accident_medical", "deductible_reimbursement"].includes(k),
   );
 
-  const carrier = carrierClient();
-  const carrierQuotes = await carrier.quote({
-    context,
-    beneficiaryRef: request.beneficiary_external_ref,
-    kinds,
-  });
+  // Every carrier that filed something we were asked for, each quoted by its own
+  // client. See lib/coverage/carriers.ts for why this is per product rather than
+  // per carrier: physical damage on one carrier's paper and liability on
+  // another's is an ordinary programme, not an edge case.
+  const groups = groupByCarrier(products, kinds);
+
+  const carrierQuotes: (CarrierQuote & { carrier_id: string })[] = [];
+
+  for (const group of groups) {
+    let produced: CarrierQuote[];
+    try {
+      produced = await group.client.quote({
+        context,
+        beneficiaryRef: request.beneficiary_external_ref,
+        kinds: group.kinds,
+      });
+    } catch (error) {
+      // One carrier being unreachable degrades the quote rather than failing it.
+      // A signer looking at a screen is better served by the two options we could
+      // price than by an error about the third.
+      console.error(
+        `carrier ${group.carrierName} failed to quote:`,
+        (error as Error).message,
+      );
+      continue;
+    }
+
+    for (const quote of produced) {
+      // A client may return more than it is filed for — the mock always returns
+      // its full catalogue. The filing is the authority, so anything not filed in
+      // this state is dropped here rather than shown and then refused at bind.
+      if (!group.productCodes.has(quote.product_code)) continue;
+      carrierQuotes.push({ ...quote, carrier_id: group.carrierId });
+    }
+  }
 
   if (carrierQuotes.length === 0) {
     return {
@@ -235,6 +275,9 @@ export async function createQuote(
     agreement_id: caller.source === "first_party" ? originating : null,
     beneficiary_signer_id: beneficiaryIsSigner ? request.beneficiary_external_ref : null,
     source: caller.source,
+    // Whose paper this price is on. Binding follows it, so a multi-carrier quote
+    // never has to guess which client to call.
+    carrier_id: q.carrier_id,
     product_code: q.product_code,
     coverage_kind: q.coverage_kind,
     limit_cents: q.limit_cents,
@@ -297,7 +340,7 @@ export async function bindQuotes(
   const { data: quotes, error } = await db
     .from("quotes")
     .select(
-      "id, coverage_context_id, agreement_id, beneficiary_signer_id, source, environment, product_code, coverage_kind, premium_cents, expires_at, carrier_quote_ref, coverage_contexts(id, partner_id, activity_class, jurisdiction, starts_at, ends_at, parties, asset, assets, supplemental)",
+      "id, coverage_context_id, agreement_id, beneficiary_signer_id, source, environment, carrier_id, product_code, coverage_kind, premium_cents, expires_at, carrier_quote_ref, carriers(id, adapter), coverage_contexts(id, partner_id, activity_class, jurisdiction, starts_at, ends_at, parties, asset, assets, supplemental)",
     )
     .in("id", request.quote_ids);
 
@@ -307,7 +350,6 @@ export async function bindQuotes(
   }
 
   const collector = request.collector ?? "carrier";
-  const carrier = carrierClient();
   const bound: BindResponse["policies"] = [];
   let total = 0;
 
@@ -367,6 +409,19 @@ export async function bindQuotes(
       continue;
     }
 
+    // Bind with whoever priced it. `carriers(adapter)` comes along on the quote
+    // rather than being looked up, so a bind can never be routed to a different
+    // carrier from the one whose number the customer was shown.
+    //
+    // A null carrier_id is a quote written before 20260901000018, when there was
+    // one anonymous carrier and it was the mock. Reading it as the mock is what
+    // actually happened; guessing anything else would be inventing history.
+    const quoteCarrier = (Array.isArray(quote.carriers)
+      ? quote.carriers[0]
+      : quote.carriers) as { id: string; adapter: string } | null;
+
+    const carrier = carrierClient(quoteCarrier?.adapter ?? "mock");
+
     const result = await carrier.bind({
       quoteRef: quote.carrier_quote_ref ?? quote.id,
       context: {
@@ -390,6 +445,7 @@ export async function bindQuotes(
         insured_signer_id: quote.beneficiary_signer_id,
         source: quote.source,
         environment: quote.environment,
+        carrier_id: quote.carrier_id,
         carrier_policy_number: result.carrier_policy_number,
         status: "bound",
         effective_at: result.effective_at,

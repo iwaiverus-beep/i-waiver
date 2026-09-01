@@ -10,6 +10,7 @@ import { staffCan } from "@/lib/platform/roles";
 import {
   PARTNER_KIND_LABELS,
   VOLUME_BAND_LABELS,
+  isCarrierApplication,
   type PartnerKind,
 } from "@/lib/partners/applications";
 
@@ -135,12 +136,13 @@ export default async function ApplicationPage({
         ) : (
           <Panel
             title="Decision"
-            description="Approving creates the partner account and emails the contact."
+            description="Where this goes depends on what they are."
           >
             <ApplicationDecision
               applicationId={application.id}
               status={application.status}
               canDecide={staffCan(staff.role, "partners.review")}
+              isCarrier={isCarrierApplication(application.partner_kind)}
             />
           </Panel>
         )}

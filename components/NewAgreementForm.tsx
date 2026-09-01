@@ -22,34 +22,68 @@ const ASSET_CLASSES = [
   { value: "other", label: "Something else" },
 ];
 
+/**
+ * A borrower's scanned request, opened for review.
+ *
+ * Everything here is a starting point, not a decision. The lender is looking at
+ * what a stranger typed into a public form, so it arrives in the ordinary form
+ * with the ordinary buttons rather than as a one-tap confirmation — the draft is
+ * created by the same route, the same way, after somebody has actually read it.
+ */
+export type RequestPrefill = {
+  requestId: string;
+  borrowerName: string;
+  borrowerEmail: string;
+  assetIds: string[];
+  startsAt: string | null;
+  endsAt: string | null;
+  jurisdiction: string | null;
+  note: string | null;
+};
+
 export function NewAgreementForm({
   states,
   assets = [],
   contacts = [],
+  prefill,
 }: {
   states: OpenState[];
   assets?: Asset[];
   contacts?: Contact[];
+  prefill?: RequestPrefill;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const now = new Date();
-  const defaultStart = new Date(now.getTime() + 60 * 60 * 1000);
-  const defaultEnd = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  // The borrower's dates when they gave them, ours when they did not. They chose
+  // a window on their own phone; overwriting it with a default would quietly
+  // discard the one piece of the request only they could supply.
+  const defaultStart = prefill?.startsAt
+    ? new Date(prefill.startsAt)
+    : new Date(now.getTime() + 60 * 60 * 1000);
+  const defaultEnd = prefill?.endsAt
+    ? new Date(prefill.endsAt)
+    : new Date(now.getTime() + 9 * 60 * 60 * 1000);
 
-  const [state, setState] = useState(states[0]?.state ?? "FL");
+  const [state, setState] = useState(
+    prefill?.jurisdiction ?? states[0]?.state ?? "FL",
+  );
 
   // Ticked items from the saved list, in the order they were ticked — that
   // order becomes Schedule A on the document, so it is a list and not a Set.
-  const [pickedIds, setPickedIds] = useState<string[]>([]);
+  // An asset-level code names the item, so a scanned request arrives with it
+  // already ticked. An originator-level one does not, and the lender picks.
+  const [pickedIds, setPickedIds] = useState<string[]>(prefill?.assetIds ?? []);
   // Describing something not on the list. Open by default for a lender with an
   // empty list, so a first-timer sees exactly the form they saw before.
-  const [addingNew, setAddingNew] = useState(assets.length === 0);
+  const [addingNew, setAddingNew] = useState(
+    assets.length === 0 && !(prefill?.assetIds.length ?? 0),
+  );
   const [contactId, setContactId] = useState("");
-  const [borrowerName, setBorrowerName] = useState("");
-  const [borrowerEmail, setBorrowerEmail] = useState("");
+  const [borrowerName, setBorrowerName] = useState(prefill?.borrowerName ?? "");
+  const [borrowerEmail, setBorrowerEmail] = useState(prefill?.borrowerEmail ?? "");
   const [saveContact, setSaveContact] = useState(true);
 
   function chooseContact(id: string) {
@@ -110,6 +144,10 @@ export function NewAgreementForm({
       jurisdiction: form.get("jurisdiction"),
       activity_class: form.get("activity_class"),
       asset_ids: pickedIds,
+      // Present only when this draft came from a scanned request. The route closes
+      // the request once the draft exists, never before: a failed create leaves it
+      // pending and the lender simply sees it in the queue again.
+      request_id: prefill?.requestId,
       // Only sent when the "something not on the list" panel is open. The API
       // treats a missing description as "no inline item", so a closed panel and
       // an empty one mean the same thing.

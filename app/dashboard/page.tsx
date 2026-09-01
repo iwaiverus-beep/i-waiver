@@ -6,6 +6,8 @@ import { AppNav } from "@/components/AppNav";
 import { Empty, Note, StatusBadge } from "@/components/app-ui";
 import { userClient } from "@/lib/supabase/server";
 import { formatDate } from "@/lib/format";
+import { requireActor } from "@/lib/agreements/access";
+import { pendingRequests } from "@/lib/intake/requests";
 
 export const metadata: Metadata = { title: "Your agreements" };
 export const dynamic = "force-dynamic";
@@ -30,6 +32,14 @@ export default async function DashboardPage() {
     .order("created_at", { ascending: false })
     .limit(100);
 
+  // The inbound queue. Read on the service client through the actor's originators,
+  // because agreement_requests is lender-side only and has no participation policy
+  // to lean on — a request has no signers yet, which is the whole point of it.
+  const { db, originatorIds } = await requireActor();
+  const waiting = await pendingRequests(db, originatorIds);
+  const waitingCount = waiting.length;
+  const firstRequestId = waiting[0]?.id;
+
   const rows = agreements ?? [];
   const drafts = rows.filter((a) => a.status === "draft").length;
   const awaiting = rows.filter((a) =>
@@ -49,6 +59,35 @@ export default async function DashboardPage() {
             : `${rows.length} total · ${drafts} draft · ${awaiting} waiting on a signature`}
         </p>
       </div>
+
+      {/* Somebody has scanned a code and is, quite possibly, standing there.
+          Deliberately a card and not a redirect: auto-opening the form on arrival
+          would mean a lender with a pending request could never reach their own
+          dashboard while it sat there. One waiting request still goes straight
+          into the prefilled form in a single tap, which is the part that matters
+          at a counter. */}
+      {waitingCount > 0 && (
+        <Link
+          href={waitingCount === 1 ? `/agreements/new?request=${firstRequestId}` : "/requests"}
+          className="mt-8 flex items-center justify-between gap-4 rounded-2xl border border-ink/15 bg-surface px-6 py-5 transition-colors hover:border-ink/30"
+        >
+          <span>
+            <span className="block text-base font-semibold text-ink">
+              {waitingCount === 1
+                ? "Someone is waiting to borrow something"
+                : `${waitingCount} people are waiting to borrow something`}
+            </span>
+            <span className="mt-1 block text-sm text-ink-soft">
+              {waitingCount === 1
+                ? "They scanned your code and filled in their side. Nothing is agreed yet."
+                : "They scanned your codes and filled in their side. Nothing is agreed yet."}
+            </span>
+          </span>
+          <span className="shrink-0 text-sm font-semibold text-ink">
+            {waitingCount === 1 ? "Set it up →" : "See them →"}
+          </span>
+        </Link>
+      )}
 
       <div className="mt-10 space-y-3">
         {rows.length === 0 && (

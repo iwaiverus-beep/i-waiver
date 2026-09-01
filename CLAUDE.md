@@ -12,6 +12,11 @@ period is included in what they sign — not offered afterwards.
 Two originator types: an individual (P2P) or an organization (rental shop,
 motocross track). Same agreement flow either way.
 
+Three kinds of lender, which is the same two things arriving by different routes:
+an individual, a company, and a company whose account a **partner platform**
+administers over the API. The partner is never the lender and never a party to the
+release — see `docs/partners.md`.
+
 ## Stack
 
 Next.js (App Router) · Supabase (Postgres + auth + storage) · Vercel · Cloudflare
@@ -51,6 +56,10 @@ can reach a second zone.
   own staff roles can do, and what is deliberately not built yet. Read before
   touching anything under `lib/partners/`, `lib/platform/` or `app/admin/`.
 - `README.md` — how to get it running, and what is mocked.
+- `supabase/templates/README.md` — the auth emails. They are the one part of the
+  product's outbound mail that is project configuration rather than code, so
+  editing a file there changes nothing until `scripts/setup-auth-emails.mjs`
+  pushes it.
 
 Where the application lives:
 
@@ -59,10 +68,14 @@ Where the application lives:
 | `lib/agreements/lifecycle.ts` | send · execute · void. Every transition after `draft`. |
 | `lib/agreements/signing.ts` | the borrower's tokenised session and the signature. |
 | `lib/agreements/access.ts` | authorisation, since the service client bypasses RLS. |
+| `lib/agreements/create.ts` | the draft, identical however it was asked for. Both callers use it. |
+| `lib/agreements/partner-origination.ts` | agreements a partner platform creates for its customer. |
 | `lib/render/agreement.ts` | canonical text and the hash a signature is bound to. |
 | `lib/render/pdf.ts` | the artifact. Reproducible bytes, pinned dates. |
 | `lib/compliance.ts` | the gate. Blocking, not advisory. |
 | `lib/coverage/` | the other bounded context. Reached over HTTP, never imported. |
+| `lib/coverage/carriers.ts` | who may write what, where, today. Per product, not per carrier. |
+| `lib/coverage/admin.ts` | carriers, products, filings, credentials. Never quotes. |
 | `lib/audit.ts` | append-only events; verification happens in SQL, not here. |
 | `lib/partners/` | applications, membership, keys, onboarding. Never touches the agreement graph. |
 | `lib/platform/` | our own staff: role capabilities, and the append-only staff action log. |
@@ -152,7 +165,41 @@ design around them. If a task seems to require breaking one, stop and ask.
     every onboarding step marked `blocksGoLive` is complete, and only for named
     states — all three checked in the route, not the UI.
 
-11. **Staff can look; they cannot rewrite history.** `platform_staff` grants access
+11. **A carrier is not a partner, and the direction is why.** `partners` /
+    `partner_integrations` model somebody who CALLS us and holds an inbound API
+    key. A carrier is called BY us, holding a credential they issued — so they
+    live in `carriers` (20260901000018), inside the coverage bounded context, and
+    approving a carrier-kind application creates a carrier rather than a partner.
+
+    Two rules inside that. **No carrier secret is ever stored:**
+    `carrier_credentials.secret_env_var` holds the NAME of the environment
+    variable, and a check constraint rejects anything not shaped like one, because
+    a key we must send in clear is a key that would otherwise sit in every backup.
+    And **there is no fallback adapter:** a carrier whose `adapter` has no
+    registered `CarrierClient` is dropped from the quote, never quietly served by
+    the mock — that would put `MOCK-` policy numbers under a real insurer's name.
+
+    Whether a product may be quoted in a state is `carrier_state_filings`, a legal
+    fact recorded only by `carriers.filings` (compliance and super admin).
+    `state_availability.carrier_admitted` is now a trigger-maintained cache of it,
+    not an input.
+
+12. **A partner platform is not the lender.** When a platform originates through
+    `/api/agreements/v1`, the lender is THEIR customer and the release runs
+    between that customer and the participant. `originators` therefore keeps its
+    two arms — a party is a person or a business — and 20260901000019 adds
+    PROVENANCE (`managed_by_partner_id`), not a third kind of party. A
+    partner-managed originator must be an organization, and the name on the
+    document comes from the lender `signers` row as it always has.
+
+    That door needs the `agreements` scope, which is never granted by default and
+    only from the admin console. It takes live keys only: a document this API
+    creates is real, and a "this one is a test" column next to evidence is the
+    column that gets set wrong. Signing links are returned to the caller, which is
+    a bearer credential for their customer's signature — intended, and said out
+    loud in the docs rather than left to be discovered.
+
+13. **Staff can look; they cannot rewrite history.** `platform_staff` grants access
     to the admin console and nothing in the evidence tables, which have no write
     policy and must never gain one. `staff_actions` is append-only like
     `audit_events`; corrections are new rows. And the embedded surface is

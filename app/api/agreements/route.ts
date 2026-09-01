@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { requestContext, recordAuditEvent } from "@/lib/audit";
+import { requestContext } from "@/lib/audit";
+import { createDraftAgreement } from "@/lib/agreements/create";
 import {
   ensureIndividualOriginator,
   originatorKind,
@@ -8,6 +9,7 @@ import {
 import { EMAIL_PATTERN, jsonError, readJson, text } from "@/lib/http";
 import { TransitionRefused } from "@/lib/agreements/lifecycle";
 import { parseDollarsToCents } from "@/lib/format";
+import { markAccepted, requestForActor } from "@/lib/intake/requests";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,6 +19,8 @@ type Body = {
   asset_id?: unknown;
   /** Saved items in schedule order. The lender's order, so it is preserved. */
   asset_ids?: unknown;
+  /** Set when this draft is a lender accepting a request that came in off a code. */
+  request_id?: unknown;
   /** One item described inline, appended after any saved ones. */
   asset?: {
     asset_class?: unknown;
@@ -116,12 +120,22 @@ export async function POST(request: Request) {
     const orderedIds = [...new Set(savedIds)];
 
     if (orderedIds.length > 0) {
-      const { data: owned } = await db
+      const { data: owned, error: ownedError } = await db
         .from("assets")
         .select("id")
         .in("id", orderedIds)
         .eq("owner_originator_id", originatorId)
         .is("archived_at", null);
+
+      // Checked, not ignored. A failed query returns no rows, and treating that
+      // as "none of these are yours" reports a database fault as an ownership
+      // problem — which is how a missing `owner_originator_id` column spent an
+      // afternoon looking like a permissions bug. An authorisation check that
+      // cannot run has not passed and has not failed; it has broken, and it must
+      // say so in those terms.
+      if (ownedError) {
+        throw new Error(`Could not verify who owns these items: ${ownedError.message}`);
+      }
 
       const ownedIds = new Set((owned ?? []).map((row) => row.id));
       const stranger = orderedIds.find((id) => !ownedIds.has(id));
@@ -173,119 +187,44 @@ export async function POST(request: Request) {
       throw new TransitionRefused("Describe what is being lent.");
     }
 
-    const assetId = orderedIds[0];
+    // Everything from here — template, agreement, Schedule A, both signers, the
+    // audit event — is shared with the partner API in lib/agreements/create.ts,
+    // so a partner-originated agreement is byte-for-byte the same shape as one a
+    // lender typed in. What stays here is the part that genuinely differs: how
+    // the originator was resolved and which assets this caller may use.
+    const requestId = text(body.request_id, 40);
 
-    // --- The template ------------------------------------------------------
-    // A published version if one exists, otherwise the newest draft. Creating a
-    // draft agreement against unreviewed wording is fine; sending it is not, and
-    // the render guard is what stops that. Refusing here instead would hide the
-    // real reason behind an empty screen.
-    //
-    // Selection is exact on all three axes. There is no fallback from
-    // 'organization' to 'individual': a business that has no reviewed wording of
-    // its own gets a refusal, never a private-loan release with its name in it.
-    const { data: templateVersions } = await db
-      .from("template_versions")
-      .select("id, version, published_at, superseded_at")
-      .eq("jurisdiction", jurisdiction)
-      .eq("activity_class", activityClass)
-      .eq("originator_kind", kind)
-      .is("superseded_at", null)
-      .order("published_at", { ascending: false, nullsFirst: false })
-      .order("version", { ascending: false });
-
-    const templateVersion = templateVersions?.[0];
-    if (!templateVersion) {
-      const activity = activityClass.replace(/_/g, " ");
-      throw new TransitionRefused(
-        kind === "organization"
-          ? `There is no ${activity} template for ${jurisdiction} for business lenders yet. A business agreement is a different instrument from a private loan, so its wording has to be reviewed on its own before it can be used.`
-          : `There is no ${activity} template for ${jurisdiction} yet.`,
-      );
-    }
-
-    // --- The agreement -----------------------------------------------------
-    const { data: agreement, error: agreementError } = await db
-      .from("agreements")
-      .insert({
-        originator_id: originatorId,
-        asset_id: assetId,
-        template_version_id: templateVersion.id,
-        jurisdiction,
-        activity_class: activityClass,
-        starts_at: new Date(startsAt).toISOString(),
-        ends_at: new Date(endsAt).toISOString(),
-        status: "draft",
-        cover_requested: body.cover_requested !== false,
-      })
-      .select("id")
-      .single();
-
-    if (agreementError || !agreement) {
-      throw new TransitionRefused(`Could not create the agreement: ${agreementError?.message}`);
-    }
-
-    // Schedule A. Written for every agreement, including a bundle of one, so
-    // that nothing downstream has to ask whether this is an old-shaped record.
-    const { error: bundleError } = await db.from("agreement_assets").insert(
-      orderedIds.map((id, index) => ({
-        agreement_id: agreement.id,
-        asset_id: id,
-        order_index: index,
-      })),
-    );
-
-    if (bundleError) {
-      // Delete rather than leave it. An agreement whose schedule is missing
-      // still renders — as a bundle of one, off the lead asset — which is the
-      // worst outcome available: a draft that looks complete and quietly lends
-      // one item instead of four. It is still a draft, so nothing has been
-      // signed and nothing is being destroyed.
-      await db.from("agreements").delete().eq("id", agreement.id).eq("status", "draft");
-      throw new TransitionRefused(`Could not record the items: ${bundleError.message}`);
-    }
-
-    const { error: signerError } = await db.from("signers").insert([
-      {
-        agreement_id: agreement.id,
-        role: "lender",
-        capacity: "adult",
-        user_id: userId,
-        display_name: lenderName,
-        email: lenderEmail,
-        order_index: 0,
-      },
-      {
-        agreement_id: agreement.id,
-        role: "borrower",
-        capacity: "adult",
-        // Deliberately no user_id. A signer is not a user, and the borrower will
-        // almost certainly never have an account.
-        display_name: borrowerName,
-        email: borrowerEmail,
-        order_index: 1,
-      },
-    ]);
-
-    if (signerError) {
-      throw new TransitionRefused(`Could not add the signers: ${signerError.message}`);
-    }
-
-    await recordAuditEvent(db, {
-      agreementId: agreement.id,
-      type: "created",
-      actor: "lender",
-      payload: {
-        jurisdiction,
-        activity_class: activityClass,
-        template_version_id: templateVersion.id,
-        template_published: Boolean(templateVersion.published_at),
-        item_count: orderedIds.length,
-      },
+    const { agreementId } = await createDraftAgreement(db, {
+      originatorId,
+      originatorKind: kind,
+      assetIds: orderedIds,
+      jurisdiction,
+      activityClass,
+      startsAt,
+      endsAt,
+      coverRequested: body.cover_requested !== false,
+      lender: { userId, name: lenderName, email: lenderEmail },
+      borrower: { name: borrowerName, email: borrowerEmail },
       context,
+      auditExtra: {
+        // Recorded because it changes what this draft is: not something the
+        // lender composed, but their acceptance of an ask that came in off a
+        // printed code.
+        from_request_id: requestId ?? undefined,
+      },
     });
 
-    return NextResponse.json({ id: agreement.id }, { status: 201 });
+    // A draft that began as a scanned request closes it here, and only here —
+    // after the agreement, its schedule and its signers all exist. Anything that
+    // failed above left the request pending, which is the recoverable state: the
+    // lender sees it in the queue again rather than losing the borrower.
+    if (requestId) {
+      const { originatorIds } = await requireActor();
+      await requestForActor(db, originatorIds, requestId);
+      await markAccepted(db, requestId, agreementId);
+    }
+
+    return NextResponse.json({ id: agreementId }, { status: 201 });
   } catch (error) {
     return jsonError(error);
   }

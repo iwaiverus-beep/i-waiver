@@ -3,8 +3,10 @@ import { jsonError, readJson, text } from "@/lib/http";
 import { logStaffAction, NotStaff, requireStaff } from "@/lib/platform/access";
 import { staffCan } from "@/lib/platform/roles";
 import {
+  API_SCOPES,
   INTEGRATION_KINDS,
   issueKey,
+  type ApiScope,
   type IntegrationKind,
 } from "@/lib/partners/integrations";
 import { blockersFor, onboardingFor } from "@/lib/partners/onboarding";
@@ -105,6 +107,18 @@ export async function POST(
           .slice(0, 20)
       : [];
 
+    // Scopes are granted here and nowhere else. `agreements` lets the holder
+    // create a release in a third party's name and send it to a signer, which is
+    // a categorically larger power than pricing cover — so the partner console
+    // cannot grant it to itself, and it is never inferred from anything.
+    const requested = Array.isArray(body.scopes)
+      ? body.scopes.map((value) => text(value, 20))
+      : [];
+
+    const scopes: ApiScope[] = API_SCOPES.filter((scope) =>
+      requested.includes(scope),
+    );
+
     const issued = await issueKey(staff.db, {
       partnerId,
       environment: wantsLive ? "live" : "sandbox",
@@ -113,6 +127,7 @@ export async function POST(
       createdBy: staff.userId,
       jurisdictions,
       allowedOrigins: origins,
+      scopes: scopes.length > 0 ? scopes : ["coverage"],
     });
 
     await logStaffAction(staff, {
@@ -126,6 +141,9 @@ export async function POST(
         // able to see that a credential was issued and not to use it.
         key_prefix: issued.integration.key_prefix,
         jurisdictions: issued.integration.allowed_jurisdictions,
+        // Worth its own line in the log. Granting `agreements` is the moment a
+        // platform can originate a release in somebody else's name.
+        scopes: issued.integration.scopes,
       },
     });
 

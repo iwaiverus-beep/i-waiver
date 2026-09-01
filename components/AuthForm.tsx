@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { browserClient } from "@/lib/supabase/browser";
+import { PasswordField } from "./PasswordField";
 
 /**
  * Sign in and sign up for lenders.
@@ -94,13 +95,12 @@ export function AuthForm({ next }: { next: string }) {
       </Field>
 
       <Field label="Password">
-        <input
-          type="password"
+        <PasswordField
           required
           minLength={8}
           autoComplete={mode === "signup" ? "new-password" : "current-password"}
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          onChange={setPassword}
           className={inputClass}
         />
       </Field>

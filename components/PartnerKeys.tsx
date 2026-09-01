@@ -21,6 +21,7 @@ type Integration = {
   label: string | null;
   key_prefix: string | null;
   allowed_jurisdictions: string[];
+  scopes: string[];
   webhook_url: string | null;
   created_at: string;
   last_used_at: string | null;
@@ -124,8 +125,10 @@ export function PartnerKeys({
         <div className="rounded-xl border border-dashed border-line p-5">
           <p className="text-sm font-semibold text-ink">Mint a sandbox key</p>
           <p className="mt-1.5 text-xs leading-relaxed text-ink-muted">
-            Sandbox keys quote in every state against a mock carrier. Live keys are
-            issued by us once onboarding is complete — see the checklist above.
+            Sandbox keys quote in every state against a mock carrier, and open the
+            coverage API only. Live keys — and access to the agreements API, which
+            originates a release in a lender&rsquo;s name — are issued by us once
+            onboarding is complete. Ask on a support ticket if you need it.
           </p>
           <div className="mt-4 flex flex-wrap gap-3">
             <input
@@ -215,6 +218,20 @@ function Row({
           <code className="font-mono text-[12px] text-ink-muted">
             {integration.key_prefix ?? "—"}
           </code>
+          {/* Which doors this key opens. `agreements` is the one worth seeing at
+              a glance: it originates a release in a lender's name. */}
+          {(integration.scopes ?? []).map((scope) => (
+            <span
+              key={scope}
+              className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
+                scope === "agreements"
+                  ? "border-flag/40 bg-flag/[0.08] text-flag"
+                  : "border-line bg-surface text-ink-muted"
+              }`}
+            >
+              {scope}
+            </span>
+          ))}
         </div>
         <p className="mt-2 text-xs leading-relaxed text-ink-muted">
           {KIND_LABELS[integration.integration_kind] ?? integration.integration_kind} ·{" "}

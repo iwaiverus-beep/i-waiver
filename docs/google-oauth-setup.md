@@ -22,7 +22,8 @@ whole exercise: create a *client* at Google, and hand its two secrets to Supabas
 The step everyone gets wrong is that **Google asks for a redirect address, and the
 correct answer is Supabase's address — not i-waiver.com.** It feels wrong. It is
 right. Google returns the answer to Supabase, and Supabase sends the person on to
-us.
+us. (Wanting it to say i-waiver.com is a fair instinct — see *Can that URL
+say i-waiver.com?* below for what that would take.)
 
 ---
 
@@ -158,6 +159,53 @@ Configuration.
 **Nothing happens when the button is pressed** — usually a popup blocker, or
 `NEXT_PUBLIC_OAUTH_PROVIDERS` naming a provider that is not actually enabled in
 Supabase.
+
+---
+
+## Can that URL say i-waiver.com?
+
+Not as things stand, and the reason is worth writing down because it comes up
+every time someone looks at that field.
+
+The redirect URI names the machine that **receives** Google's answer. That
+machine is Supabase. Type `i-waiver.com` in there and Google will refuse the
+sign-in with `redirect_uri_mismatch`, because nothing at i-waiver.com is
+listening for it.
+
+The proper fix is to make Supabase itself answer on our domain, so its login
+server lives at `auth.i-waiver.com` and the field reads:
+
+```
+https://auth.i-waiver.com/auth/v1/callback
+```
+
+That is Supabase's **Custom Domain add-on**: the Pro plan (~$25/mo) plus the
+add-on (~$10/mo). As of 2026-09-01 this project's Supabase organisation is on
+Free, and the API turns down both that and the cheaper vanity subdomain:
+
+> Custom domains require the Custom Domain add-on, available on the Pro plan and
+> above.
+
+So it is a billing decision, not an engineering one.
+
+### If we buy it
+
+Four things move together. Miss one and sign-in breaks for everybody.
+
+1. Enable the add-on in the Supabase dashboard
+2. Add the verification DNS records — **`i-waiver.com` is registered in the
+   LeadLynk Cloudflare account**, not the iWaiver one, so that is where they go
+3. Swap `NEXT_PUBLIC_SUPABASE_URL` in `.env.local` **and in Vercel** to the new
+   host
+4. Update the redirect URI in 1.3 above, and Supabase's own redirect allow-list
+
+### Free in the meantime
+
+The **Branding** page, in the same left-hand menu as Clients, carries the app
+name, logo and home-page link. That is what a user actually reads on the consent
+screen. Set it to `I-Waiver`, our logo and `https://i-waiver.com` and the screen
+reads as our product. The `supabase.co` host stays in the plumbing — visible for
+a moment in the address bar mid-redirect — but stops being the headline.
 
 ---
 

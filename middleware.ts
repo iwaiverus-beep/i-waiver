@@ -5,7 +5,7 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
  * Refreshes the Supabase session cookie on every matched request, and keeps
  * unauthenticated visitors out of the lender area.
  *
- * `/sign/...` is intentionally not matched. A borrower has no session, no account,
+ * `/sign/...` and `/start/...` are intentionally not matched. A borrower has no session, no account,
  * and no business acquiring either — their capability is the token in the URL, and
  * it is checked server-side in the route that uses it.
  */
@@ -46,6 +46,8 @@ export async function middleware(request: NextRequest) {
     path.startsWith("/agreements") ||
     path.startsWith("/assets") ||
     path.startsWith("/contacts") ||
+    path.startsWith("/requests") ||
+    path.startsWith("/codes") ||
     path.startsWith("/account") ||
     // Signed-in areas that are not the lender's. Being signed in is all this
     // checks; whether the account is a partner member or staff is decided by
@@ -85,6 +87,8 @@ export const config = {
     "/agreements/:path*",
     "/assets/:path*",
     "/contacts/:path*",
+    "/requests/:path*",
+    "/codes/:path*",
     "/account/:path*",
     "/partners/console/:path*",
     "/admin/:path*",

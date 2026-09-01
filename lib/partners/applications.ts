@@ -9,6 +9,7 @@ import {
   partnerDeclined,
 } from "@/lib/partners/emails";
 import { partnerNotificationEmail } from "@/lib/env";
+import { createCarrier } from "@/lib/coverage/admin";
 import type { Staff } from "@/lib/platform/access";
 import { logStaffAction } from "@/lib/platform/access";
 
@@ -183,7 +184,30 @@ export type ApprovalResult = {
 };
 
 /**
+ * The application kinds that are NOT partners.
+ *
+ * A carrier or an MGA sits on the other side of the coverage boundary: we call
+ * them, holding a credential they issued. `partners` / `partner_integrations`
+ * model somebody who calls US and holds an inbound API key, so approving a
+ * carrier into that table would hand them a key to an API they will never use
+ * while their real credential had nowhere to live.
+ *
+ * They still apply through the same public form — an inbound lead is an inbound
+ * lead — and approval routes them to `carriers` instead. See migration
+ * 20260901000018.
+ */
+const CARRIER_APPLICATION_KINDS: readonly string[] = ["carrier", "mga"];
+
+export function isCarrierApplication(kind: string): boolean {
+  return CARRIER_APPLICATION_KINDS.includes(kind);
+}
+
+/**
  * Turn an application into a partner account. The only path that creates one.
+ *
+ * Refuses a carrier-kind application outright rather than quietly doing something
+ * reasonable-looking with it: see `approveCarrierApplication`, which is where
+ * those go.
  */
 export async function approveApplication(
   staff: Staff,
@@ -204,6 +228,12 @@ export async function approveApplication(
   }
   if (application.status === "withdrawn") {
     throw new ApplicationRefused("That application was withdrawn.", 409);
+  }
+  if (isCarrierApplication(application.partner_kind)) {
+    throw new ApplicationRefused(
+      "That is a carrier, not a distribution partner. Approve it as a carrier — it needs a carrier record and outbound credentials, not an inbound API key.",
+      409,
+    );
   }
 
   const slug = await uniqueSlug(db, application.company_name);
@@ -277,6 +307,80 @@ export async function approveApplication(
   });
 
   return { partnerId: partner.id, slug: partner.slug };
+}
+
+/**
+ * Approve a carrier-kind application into a `carriers` row.
+ *
+ * Deliberately does much less than the partner path. No account is created, no
+ * email is sent, and no credential is issued, because none of those is what
+ * happens next with a carrier: what happens next is a contract, then filings,
+ * then somebody writes an adapter. The row is a `prospect` until all three are
+ * true, and `setCarrierStatus` refuses to make it active before there is code
+ * that can talk to it.
+ */
+export async function approveCarrierApplication(
+  staff: Staff,
+  applicationId: string,
+  options: { note?: string | null } = {},
+): Promise<{ carrierId: string; slug: string }> {
+  const db = staff.db;
+
+  const { data: application } = await db
+    .from("partner_applications")
+    .select("*")
+    .eq("id", applicationId)
+    .maybeSingle();
+
+  if (!application) throw new ApplicationRefused("No such application.", 404);
+  if (application.status === "approved") {
+    throw new ApplicationRefused("That application has already been approved.", 409);
+  }
+  if (!isCarrierApplication(application.partner_kind)) {
+    throw new ApplicationRefused(
+      "That is a distribution partner, not a carrier. Approve it as a partner.",
+      409,
+    );
+  }
+
+  const carrier = await createCarrier(db, {
+    name: application.company_name,
+    kind: application.partner_kind === "mga" ? "mga" : "carrier",
+    contactName: application.contact_name,
+    contactEmail: application.contact_email,
+    notes: options.note ?? application.notes,
+  });
+
+  // `approved_as_carrier` is its own status rather than `approved`, for two
+  // reasons that both matter. The constraint `approved_application_has_partner`
+  // requires a partner_id on an approved row and there is no partner here; and
+  // closing it as `declined` — the other tempting shortcut — would put the wrong
+  // word in the queue for something we said yes to.
+  //
+  // No foreign key to `carriers` either. A column on partner_applications
+  // pointing at a carrier would be the schema quietly asserting that a carrier is
+  // a kind of partner, which is the exact confusion this whole split exists to
+  // undo. The slug is in the note; the carrier is found by name.
+  await db
+    .from("partner_applications")
+    .update({
+      status: "approved_as_carrier",
+      status_note: `Opened as carrier ${carrier.slug}.${
+        options.note ? ` ${options.note}` : ""
+      }`,
+      reviewed_at: new Date().toISOString(),
+      reviewed_by: staff.userId,
+    })
+    .eq("id", applicationId);
+
+  await logStaffAction(staff, {
+    action: "partner_application.approved_as_carrier",
+    subjectType: "partner_application",
+    subjectId: applicationId,
+    detail: { carrier_id: carrier.id, slug: carrier.slug, company: application.company_name },
+  });
+
+  return { carrierId: carrier.id, slug: carrier.slug };
 }
 
 export async function declineApplication(

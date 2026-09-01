@@ -69,6 +69,10 @@ Supabase Auth: for local work, turn **off** email confirmation
 (Authentication → Providers → Email), or you will have to confirm every test
 account by hand.
 
+The emails Auth does send — confirmation, password reset, magic link — are ours
+rather than Supabase's defaults. They live in `supabase/templates/`; see the
+README there and `scripts/setup-auth-emails.mjs`.
+
 ### 3. Publish the specimen clauses — development only
 
 Out of the box **nothing will render**, on purpose. The seeded clause set is
@@ -167,6 +171,7 @@ node scripts/db-push.mjs      --apply   # pending migrations
 node scripts/db-run.mjs <file> --apply  # one SQL file (the seeds live here)
 node scripts/setup-deploy.mjs --apply   # Vercel project, env vars, domains, Cloudflare DNS
 node scripts/setup-email.mjs  --apply   # register the domain with Resend, write its DNS
+node scripts/setup-auth-emails.mjs --apply  # our name and sender on the auth emails
 ```
 
 They share a preflight that refuses to run against the wrong account: the Vercel

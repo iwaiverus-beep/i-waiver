@@ -2,16 +2,54 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Container } from "@/components/ui";
 import { Note } from "@/components/app-ui";
-import { NewAgreementForm, type OpenState } from "@/components/NewAgreementForm";
+import {
+  NewAgreementForm,
+  type OpenState,
+  type RequestPrefill,
+} from "@/components/NewAgreementForm";
 import type { Asset } from "@/components/AssetsManager";
 import type { Contact } from "@/components/ContactsManager";
 import { userClient } from "@/lib/supabase/server";
+import { requireActor } from "@/lib/agreements/access";
+import { requestForActor } from "@/lib/intake/requests";
 
 export const metadata: Metadata = { title: "Lend something" };
 export const dynamic = "force-dynamic";
 
-export default async function NewAgreementPage() {
+export default async function NewAgreementPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ request?: string }>;
+}) {
   const supabase = await userClient();
+
+  // `?request=` means a borrower scanned a code and this lender is looking at what
+  // they asked for. Loaded through requestForActor, which refuses a request
+  // belonging to somebody else — the id is in a URL a lender can edit.
+  const { request: requestId } = await searchParams;
+  let prefill: RequestPrefill | undefined;
+  if (requestId) {
+    const { db, originatorIds } = await requireActor();
+    const asked = await requestForActor(db, originatorIds, requestId);
+    if (asked.status === "pending") {
+      const { data: link } = await db
+        .from("intake_links")
+        .select("jurisdiction")
+        .eq("id", asked.intake_link_id)
+        .maybeSingle();
+
+      prefill = {
+        requestId: asked.id,
+        borrowerName: asked.borrower_name,
+        borrowerEmail: asked.borrower_email ?? "",
+        assetIds: asked.asset_id ? [asked.asset_id] : [],
+        startsAt: asked.starts_at,
+        endsAt: asked.ends_at,
+        jurisdiction: link?.jurisdiction ?? null,
+        note: asked.note,
+      };
+    }
+  }
 
   // Only states we are actually open in are offered. Availability is readable by
   // anon and authenticated — it is the one piece of reference data the public site
@@ -60,7 +98,12 @@ export default async function NewAgreementPage() {
           </div>
         ) : (
           <div className="mt-10">
-            <NewAgreementForm states={states} assets={assets} contacts={contacts} />
+            <NewAgreementForm
+              states={states}
+              assets={assets}
+              contacts={contacts}
+              prefill={prefill}
+            />
           </div>
         )}
       </div>

@@ -8,6 +8,7 @@ import { NotPartner } from "@/lib/partners/access";
 import { NotStaff } from "@/lib/platform/access";
 import { ApplicationRefused } from "@/lib/partners/applications";
 import { TicketRefused } from "@/lib/support/tickets";
+import { CarrierRefused } from "@/lib/coverage/admin";
 
 /**
  * One place that decides what a caller is told when something goes wrong.
@@ -25,7 +26,11 @@ export function jsonError(error: unknown): NextResponse {
     return NextResponse.json({ error: error.message }, { status: 404 });
   }
 
-  if (error instanceof ApplicationRefused || error instanceof TicketRefused) {
+  if (
+    error instanceof ApplicationRefused ||
+    error instanceof TicketRefused ||
+    error instanceof CarrierRefused
+  ) {
     return NextResponse.json({ error: error.message }, { status: error.status });
   }
 

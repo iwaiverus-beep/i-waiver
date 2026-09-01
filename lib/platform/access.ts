@@ -142,6 +142,10 @@ export async function logStaffAction(
       | "partner_application"
       | "partner_integration"
       | "partner_branding"
+      | "carrier"
+      | "carrier_product"
+      | "carrier_filing"
+      | "carrier_credential"
       | "support_ticket"
       | "platform_staff"
       | "state_availability";
