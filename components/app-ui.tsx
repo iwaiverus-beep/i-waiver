@@ -45,7 +45,7 @@ export function Panel({
 }) {
   return (
     <section className="rounded-2xl border border-line bg-paper">
-      <header className="flex items-start justify-between gap-4 border-b border-line px-6 py-4">
+      <header className="flex items-start justify-between gap-4 rounded-t-2xl border-b border-line bg-surface/70 px-6 py-4">
         <div>
           <h2 className="text-sm font-semibold text-ink">{title}</h2>
           {description && (
