@@ -30,6 +30,7 @@ export function SignerContact({
   phone,
   delivery,
   canEdit,
+  awaitingSend = false,
 }: {
   agreementId: string;
   signerId: string;
@@ -38,6 +39,8 @@ export function SignerContact({
   phone: string | null;
   delivery: DeliveryState | null;
   canEdit: boolean;
+  /** Still a draft — nothing has gone out, so there is no link to replace. */
+  awaitingSend?: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -75,9 +78,11 @@ export function SignerContact({
 
     setOpen(false);
     setSaved(
-      body.links_revoked > 0
-        ? "Saved. Any link already sent to the old address has stopped working — send a new one below."
-        : "Saved. Send them a new link below.",
+      awaitingSend
+        ? "Saved. This is where it will go when you send it."
+        : body.links_revoked > 0
+          ? "Saved. Any link already sent to the old address has stopped working — send a new one below."
+          : "Saved. Send them a new link below.",
     );
     router.refresh();
   }
@@ -155,8 +160,9 @@ export function SignerContact({
             </label>
 
             <p className="text-xs text-ink-muted">
-              This changes the agreement itself — their address is part of what
-              gets signed — so any link already sent will stop working.
+              {awaitingSend
+                ? "Their address is part of what gets signed, so this changes the agreement itself. Nothing has gone out yet."
+                : "This changes the agreement itself — their address is part of what gets signed — so any link already sent will stop working."}
             </p>
 
             <div className="flex flex-wrap gap-3">

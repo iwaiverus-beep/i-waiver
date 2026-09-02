@@ -343,15 +343,35 @@ export default async function AgreementPage({
         </div>
 
         <div className="space-y-6">
-          {["sent", "partially_signed"].includes(agreement.status) && borrower && (
-            <Panel title="Signing links" description="Tokenised, single use, 48 hours.">
+          {/*
+            Drafts too, which is the whole of why the condition is not the same
+            one that governs the links. `updateSignerContact` has always allowed
+            `draft` — the address is only frozen once somebody signs — but the
+            editor lived inside a panel that appeared at send. So a lender who
+            spotted their own typo before sending had no way to correct it and
+            the only remedy for gmial.com was to throw the draft away and build
+            it again, which is the exact "start over" this feature exists to
+            avoid. It just happened one step earlier than anybody tested.
+          */}
+          {["draft", "sent", "partially_signed"].includes(agreement.status) &&
+            borrower && (
+            <Panel
+              title={agreement.status === "draft" ? "Reaching them" : "Signing links"}
+              description={
+                agreement.status === "draft"
+                  ? "Where this goes when you send it."
+                  : "Tokenised, single use, 48 hours."
+              }
+            >
               <div className="space-y-6">
-                <SigningLinks
-                  agreementId={id}
-                  lenderSigned={Boolean(lender?.signed_at)}
-                  borrowerSigned={Boolean(borrower.signed_at)}
-                  borrowerName={borrower.display_name}
-                />
+                {agreement.status !== "draft" && (
+                  <SigningLinks
+                    agreementId={id}
+                    lenderSigned={Boolean(lender?.signed_at)}
+                    borrowerSigned={Boolean(borrower.signed_at)}
+                    borrowerName={borrower.display_name}
+                  />
+                )}
 
                 {/* Below the buttons, not above them. The ordinary visit is
                     "send this to them"; the address is only interesting once
@@ -364,6 +384,7 @@ export default async function AgreementPage({
                     email={borrower.email}
                     phone={borrower.phone}
                     canEdit={nobodyHasSigned}
+                    awaitingSend={agreement.status === "draft"}
                     delivery={
                       lastLink
                         ? {
