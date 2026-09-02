@@ -45,6 +45,9 @@ const CONTROL =
  */
 const ARCHIVED_OPTION = "shelf:archived";
 
+/** What the box reads before anybody has picked anything. Never a real value. */
+const PLACEHOLDER_OPTION = "";
+
 type Counts = { active: number; drafts: number; awaiting: number; archived: number };
 
 export function AgreementsList({
@@ -66,6 +69,10 @@ export function AgreementsList({
   const [counts, setCounts] = useState(initialCounts);
   const [sweepCount, setSweepCount] = useState(sweep.count);
   const [busy, setBusy] = useState(false);
+  // Whether an order has been chosen here, as opposed to inherited. It decides
+  // only what the closed box reads; the list is sorted by `params.sort` either
+  // way. See `selected` below.
+  const [sortPicked, setSortPicked] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -245,6 +252,17 @@ export function AgreementsList({
     params.status !== DEFAULT_PARAMS.status ||
     params.shelf !== DEFAULT_PARAMS.shelf;
 
+  // What the sort box shows when it is closed: its own name until the reader
+  // has actually chosen an order, then the order they chose. A link carrying
+  // `?sort=` counts as having chosen — the list is not in its default order and
+  // the box should not claim otherwise.
+  const selected =
+    params.shelf === "archived"
+      ? ARCHIVED_OPTION
+      : sortPicked || params.sort !== DEFAULT_PARAMS.sort
+        ? params.sort
+        : PLACEHOLDER_OPTION;
+
   return (
     <div>
       <p className="mt-2 text-sm text-ink-soft">
@@ -288,17 +306,30 @@ export function AgreementsList({
         </label>
         <select
           id="agreement-sort"
-          value={params.shelf === "archived" ? ARCHIVED_OPTION : params.sort}
+          value={selected}
           onChange={(event) => {
             const value = event.target.value;
             if (value === ARCHIVED_OPTION) {
               update({ shelf: "archived" });
               return;
             }
+            setSortPicked(true);
             update({ shelf: "active", sort: value as SortKey });
           }}
           className={CONTROL}
         >
+          {/*
+            Closed, the box says what it is for rather than what it is doing.
+            "Newest first" sitting there is the answer to a question nobody
+            asked — it is the order the list has always opened in — and it took
+            a reader a moment to work out that the box was the way to change it.
+            Disabled because it is a name, not a choice: picking Newest first
+            gets you here and says so.
+          */}
+          <option value={PLACEHOLDER_OPTION} disabled>
+            Sort order
+          </option>
+
           {/* The groups are named because a phone shows these labels in the
               picker, and "Archived" sitting under four sorts with nothing to
               separate them would read as a fifth way to sort. */}
