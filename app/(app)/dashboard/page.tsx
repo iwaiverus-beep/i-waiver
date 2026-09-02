@@ -82,7 +82,7 @@ export default async function DashboardPage({
   const sweepCount = await countFinishedBefore(actor, sweepBefore);
 
   return (
-    <Container className="py-14 sm:py-20">
+    <Container className="pb-14 pt-0 sm:py-20">
       <AppNav />
       {/* No action button here: "Lend something" leads AppNav, so it sits in the
           same place on every lender screen rather than moving around. */}

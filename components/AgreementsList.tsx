@@ -7,16 +7,12 @@ import { formatDate } from "@/lib/format";
 import {
   DEFAULT_PARAMS,
   listParamsToQuery,
-  SHELF_LABELS,
   SORT_LABELS,
-  STATUS_FILTER_LABELS,
   type AgreementListRow,
   type AgreementPage,
   type ListParams,
   type ListSignerRow,
-  type Shelf,
   type SortKey,
-  type StatusFilter,
 } from "@/lib/agreements/list-types";
 
 /**
@@ -38,6 +34,16 @@ import {
 
 const CONTROL =
   "rounded-xl border border-line bg-paper px-4 py-2.5 text-sm text-ink outline-none focus:border-accent";
+
+/**
+ * The one entry in the sort menu that is not a sort.
+ *
+ * A select holds a single value, so the shelf and the sort share one: this
+ * sentinel means "the archived shelf", and every other value means the current
+ * shelf sorted that way. Deliberately not a `SortKey` — it must never be sent to
+ * the API as one.
+ */
+const ARCHIVED_OPTION = "shelf:archived";
 
 type Counts = { active: number; drafts: number; awaiting: number; archived: number };
 
@@ -260,68 +266,55 @@ export function AgreementsList({
           className={`${CONTROL} min-w-[14rem] flex-1 rounded-full`}
         />
 
-        <label className="sr-only" htmlFor="agreement-status">
-          Filter by state
-        </label>
-        <select
-          id="agreement-status"
-          value={params.status}
-          onChange={(event) => update({ status: event.target.value as StatusFilter })}
-          className={CONTROL}
-        >
-          {Object.entries(STATUS_FILTER_LABELS).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
+        {/*
+          One control beside the search box, where there were three.
 
+          The state filter is gone: five ways to slice a list by status is a
+          reporting tool, and this screen is a list of what somebody lent out.
+          Search already finds a name, and the badge on every row says what state
+          it is in.
+
+          The shelf came in here with the sort. It was three chips underneath —
+          Current, Archived, Everything — which read as a second navigation on a
+          screen that already has one, and on a phone they pushed the first
+          agreement below the fold. Archived is now the last entry in this menu:
+          picking it shows what has been filed away, and picking any sort brings
+          the current list back. "Everything" is not offered at all: it was one
+          shelf too many for a phone, and searching the archive is a matter of
+          picking Archived first. A `?shelf=all` link still works.
+        */}
         <label className="sr-only" htmlFor="agreement-sort">
-          Sort
+          Sort order
         </label>
         <select
           id="agreement-sort"
-          value={params.sort}
-          onChange={(event) => update({ sort: event.target.value as SortKey })}
+          value={params.shelf === "archived" ? ARCHIVED_OPTION : params.sort}
+          onChange={(event) => {
+            const value = event.target.value;
+            if (value === ARCHIVED_OPTION) {
+              update({ shelf: "archived" });
+              return;
+            }
+            update({ shelf: "active", sort: value as SortKey });
+          }}
           className={CONTROL}
         >
-          {Object.entries(SORT_LABELS).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
+          {/* The groups are named because a phone shows these labels in the
+              picker, and "Archived" sitting under four sorts with nothing to
+              separate them would read as a fifth way to sort. */}
+          <optgroup label="Sort order">
+            {Object.entries(SORT_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </optgroup>
+          <optgroup label="Show">
+            <option value={ARCHIVED_OPTION}>
+              Archived{counts.archived > 0 ? ` (${counts.archived})` : ""}
             </option>
-          ))}
+          </optgroup>
         </select>
-      </div>
-
-      {/* The shelf. Chips rather than a fourth dropdown, because "where are my
-          old ones?" is the question this screen is asked most and the answer
-          should be visible rather than found. */}
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        {(Object.keys(SHELF_LABELS) as Shelf[]).map((shelf) => {
-          const active = params.shelf === shelf;
-          const badge =
-            shelf === "active"
-              ? counts.active
-              : shelf === "archived"
-                ? counts.archived
-                : counts.active + counts.archived;
-          return (
-            <button
-              key={shelf}
-              type="button"
-              onClick={() => update({ shelf })}
-              aria-pressed={active}
-              className={`rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
-                active
-                  ? "bg-ink text-paper"
-                  : "text-ink-soft hover:bg-surface hover:text-ink"
-              }`}
-            >
-              {SHELF_LABELS[shelf]}{" "}
-              <span className={active ? "text-paper/60" : "text-ink-muted"}>{badge}</span>
-            </button>
-          );
-        })}
       </div>
 
       {/* --- The tidy-up -------------------------------------------------- */}
@@ -359,10 +352,13 @@ export function AgreementsList({
         {page.rows.length === 0 && !busy && (
           <div className="rounded-2xl border border-line bg-paper px-6 py-12 text-center">
             <p className="text-sm text-ink-muted">
-              {filtered
-                ? "Nothing matches that."
-                : params.shelf === "archived"
-                  ? "Nothing has been filed away yet."
+              {/* The empty archive is its own answer and has to be asked first:
+                  choosing Archived counts as filtering, so the generic "nothing
+                  matches" used to win and say nothing useful. */}
+              {params.shelf === "archived" && params.query === ""
+                ? "Nothing has been filed away yet."
+                : filtered
+                  ? "Nothing matches that."
                   : "Start by describing what you are lending, to whom, and for how long."}
             </p>
             {filtered && (

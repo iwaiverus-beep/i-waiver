@@ -54,14 +54,12 @@ export const PAGE_SIZE = 25;
  *
  * Archiving is filing, not deleting, so `all` exists: somebody searching for a
  * name two summers old should not have to guess which shelf it is on.
+ *
+ * The three used to be chips on the dashboard — Current, Archived, Everything.
+ * They are not any more: Archived is an entry in the sort menu, and `all` is
+ * reachable only by a link that asks for it. The labels went with the chips.
  */
 export type Shelf = "active" | "archived" | "all";
-
-export const SHELF_LABELS: Record<Shelf, string> = {
-  active: "Current",
-  archived: "Archived",
-  all: "Everything",
-};
 
 /**
  * Status filters in the lender's words, not the enum's.
@@ -69,6 +67,11 @@ export const SHELF_LABELS: Record<Shelf, string> = {
  * Grouped rather than one per status, because the questions people actually ask
  * are "what needs signing?" and "what is done?" — `sent` and `partially_signed`
  * are the same answer to the first.
+ *
+ * NOT OFFERED ON THE DASHBOARD ANY MORE. The control came off the list: five
+ * ways to slice by status is a reporting tool, and search plus the badge on each
+ * row answers what people were really using it for. The query still honours
+ * `?status=`, so a saved link keeps working and the filter can come back.
  */
 export const STATUS_FILTERS = {
   all: null,
