@@ -7,6 +7,7 @@ import { MissingEnvError } from "@/lib/env";
 import { NotPartner } from "@/lib/partners/access";
 import { NotStaff } from "@/lib/platform/access";
 import { ApplicationRefused } from "@/lib/partners/applications";
+import { ProspectRefused } from "@/lib/partners/prospects";
 import { TicketRefused } from "@/lib/support/tickets";
 import { CarrierRefused } from "@/lib/coverage/admin";
 
@@ -28,6 +29,7 @@ export function jsonError(error: unknown): NextResponse {
 
   if (
     error instanceof ApplicationRefused ||
+    error instanceof ProspectRefused ||
     error instanceof TicketRefused ||
     error instanceof CarrierRefused
   ) {

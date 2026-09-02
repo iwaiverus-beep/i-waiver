@@ -81,7 +81,11 @@ Where the application lives:
 | `lib/coverage/admin.ts` | carriers, products, filings, credentials. Never quotes. |
 | `lib/audit.ts` | append-only events; verification happens in SQL, not here. |
 | `lib/partners/` | applications, membership, keys, onboarding. Never touches the agreement graph. |
+| `lib/partners/prospects.ts` | the target list, before anybody is a partner. Holds no key and no way in. |
+| `lib/partners/vocabulary.ts` | the words both consoles render. No imports, no `server-only`. |
 | `lib/platform/` | our own staff: role capabilities, and the append-only staff action log. |
+| `lib/platform/reports.ts` | lenders, borrowers, agreement totals. Counts in SQL; reads no quote. |
+| `lib/coverage/reporting.ts` | quoted, bound, collected. The insurance half of the dashboard, on its own side of the boundary. |
 | `lib/support/` | tickets. One reader strips internal notes, and there is no flag that skips it. |
 
 ## Non-negotiable constraints

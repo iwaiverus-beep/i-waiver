@@ -37,6 +37,15 @@ export type StaffCapability =
   | "carriers.filings"
   /** Empty a partner's sandbox. */
   | "sandbox.purge"
+  /**
+   * Read the lender and borrower reports, and export them.
+   *
+   * Separate from `console.read` deliberately. Seeing the console is one thing;
+   * downloading a file containing every borrower's name, email and the states
+   * they signed in is another, and the second should not arrive as a side effect
+   * of the first. `read_only` therefore does not have it.
+   */
+  | "reports.read"
   /** Read and reply to support tickets. */
   | "support.respond"
   /** Assign, prioritise and close tickets. */
@@ -59,6 +68,7 @@ const CAPABILITIES: Record<StaffRole, StaffCapability[]> = {
     "carriers.manage",
     "carriers.filings",
     "sandbox.purge",
+    "reports.read",
     "support.respond",
     "support.triage",
     "compliance.states",
@@ -72,11 +82,14 @@ const CAPABILITIES: Record<StaffRole, StaffCapability[]> = {
     "partners.key.sandbox",
     "branding.review",
     "sandbox.purge",
+    "reports.read",
     "support.respond",
     "support.triage",
     "console.read",
   ],
-  support: ["support.respond", "support.triage", "console.read"],
+  // Support reads accounts in order to answer questions about them, which is
+  // exactly what the lender and borrower reports are. It still changes nothing.
+  support: ["reports.read", "support.respond", "support.triage", "console.read"],
   // States, filings and clause sets are a legal judgement, not an operational
   // one, so the person who makes it does not also run the commercial pipeline.
   //
@@ -87,6 +100,7 @@ const CAPABILITIES: Record<StaffRole, StaffCapability[]> = {
   compliance: [
     "carriers.filings",
     "compliance.states",
+    "reports.read",
     "support.respond",
     "console.read",
   ],
@@ -109,7 +123,8 @@ export const STAFF_ROLE_DESCRIPTIONS: Record<StaffRole, string> = {
   support: "Answers tickets. Reads accounts; changes nothing about them.",
   compliance:
     "Records carrier filings, opens and closes states, and signs off clause sets.",
-  read_only: "Sees the console. Changes nothing.",
+  read_only:
+    "Sees the console and the dashboard totals. Cannot open the lender or borrower reports.",
 };
 
 export function staffCan(role: StaffRole, capability: StaffCapability): boolean {

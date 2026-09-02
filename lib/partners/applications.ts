@@ -29,39 +29,21 @@ import { logStaffAction } from "@/lib/platform/access";
  * who authorised it.
  */
 
-export const PARTNER_KINDS = [
-  "waiver_platform",
-  "booking_platform",
-  "carrier",
-  "mga",
-  "broker",
-  "other",
-] as const;
+/**
+ * The vocabulary moved to lib/partners/vocabulary.ts when the console needed to
+ * render these labels in the browser — this module is `server-only`, so a client
+ * component importing it fails the build. Re-exported here so every existing
+ * `from "@/lib/partners/applications"` keeps working and there is still one list.
+ */
+export {
+  PARTNER_KINDS,
+  PARTNER_KIND_LABELS,
+  VOLUME_BANDS,
+  VOLUME_BAND_LABELS,
+  type PartnerKind,
+} from "@/lib/partners/vocabulary";
 
-export type PartnerKind = (typeof PARTNER_KINDS)[number];
-
-export const PARTNER_KIND_LABELS: Record<PartnerKind, string> = {
-  waiver_platform: "Waiver platform",
-  booking_platform: "Booking or rental platform",
-  carrier: "Insurance carrier",
-  mga: "MGA or programme manager",
-  broker: "Broker or agency",
-  other: "Something else",
-};
-
-export const VOLUME_BANDS = [
-  "under_10k",
-  "10k_100k",
-  "100k_1m",
-  "over_1m",
-] as const;
-
-export const VOLUME_BAND_LABELS: Record<string, string> = {
-  under_10k: "Under 10,000 waivers a year",
-  "10k_100k": "10,000 – 100,000",
-  "100k_1m": "100,000 – 1 million",
-  over_1m: "Over 1 million",
-};
+import type { PartnerKind } from "@/lib/partners/vocabulary";
 
 export class ApplicationRefused extends Error {
   constructor(message: string, readonly status = 422) {

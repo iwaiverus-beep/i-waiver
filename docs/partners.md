@@ -351,7 +351,15 @@ Roles and capabilities are in `lib/platform/roles.ts`, and rendered on
 | `admin` | Runs the partner pipeline. Cannot put anyone live |
 | `support` | Answers tickets. Reads accounts, changes nothing about them |
 | `compliance` | Opens states, signs off clause sets |
-| `read_only` | Sees the console |
+| `read_only` | Sees the console and the dashboard totals |
+
+`reports.read` is separate from `console.read` on purpose. Seeing the console is
+one thing; downloading a file of every borrower's name, address and the states
+they signed in is another, and the second must not arrive as a side effect of the
+first. `read_only` does not have it, so `/admin/lenders` and `/admin/borrowers`
+are a 404 for that role and the tabs are not drawn. Every export writes a
+`staff_actions` row naming who took it: a file outlives the session, gets
+forwarded, and is the thing somebody eventually has to account for.
 
 **What staff still cannot do.** Nothing in these migrations opens a path into the
 evidence tables. `signatures`, `consent_records`, `documents`, `audit_events`,
@@ -370,6 +378,89 @@ It is an environment variable so that it is legible in a deploy configuration an
 changing it is a deployment. **Empty it once real staff rows exist** — an address
 left in it cannot be revoked from inside the product, and `/admin` says so on the
 banner while it is still in use.
+
+There is a second door, and it is the better one where the database is reachable
+from the repository, which here it is: `supabase/seed/grant_first_super_admin.sql`
+writes the row directly.
+
+```
+node scripts/db-run.mjs supabase/seed/grant_first_super_admin.sql --apply
+```
+
+A row can be revoked from inside the product; an address in the environment
+variable cannot. So the variable stays empty, and the seed is run once. It is a
+seed rather than a migration because staff access is a fact about one named person
+at one company, not a fact about the schema — a migration would re-assert that
+grant against every database ever built from these files. The first grant is the
+only one with nobody to name as its author; everyone after it is granted from
+`/admin/staff`, which writes a `staff_actions` row.
+
+**The first super admin is `john.mcelroy@i-waiver.com`**, granted 2026-09-01.
+
+## What the console shows
+
+| Tab | What it answers |
+|---|---|
+| Queues (`/admin`) | What is waiting on a decision this morning |
+| Overview (`/admin/overview`) | The platform in numbers — lenders, borrowers, agreements signed, insurance |
+| Partners (`/admin/partners`) | Who we supply, and who we want to |
+| Carriers (`/admin/carriers`) | Whose paper sits behind the quotes |
+| Lenders (`/admin/lenders`) | Every originator, with an export |
+| Borrowers (`/admin/borrowers`) | Every signer, with an export |
+| Support, Staff | Tickets, and who works here |
+
+Queues stays the landing page. The two screens answer different questions and the
+queues answer the more urgent one; replacing it with counts would trade a screen
+somebody acts on for a screen somebody looks at.
+
+**The dashboard reads two reports, not one.** Agreement figures come from
+`lib/platform/reports.ts`, insurance figures from `lib/coverage/reporting.ts`.
+Neither module imports the other and no view underneath them joins across the
+coverage boundary (CLAUDE.md constraint 9). Putting both sets of numbers on one
+page is a person reading two reports side by side; a single query answering
+"executed agreements that also bought cover" would be the boundary quietly ceasing
+to exist. Every insurance figure filters `environment = 'live'` in SQL, and the
+sandbox total is shown separately as what it is.
+
+**The counting happens in SQL** — `platform_lender_report`,
+`platform_borrower_report`, `platform_agreement_stats`, `platform_coverage_stats`
+and `platform_coverage_by_product`, all in migration `20260901000039`. A dashboard
+that pulls rows through PostgREST and adds them up in Node is correct until there
+are more rows than one page, and then it is silently wrong with nothing on screen
+changing. All five views are revoked from `anon` and `authenticated`.
+
+A borrower is counted by **email address**, not by signer row: a signer is not a
+user, and the same person borrowing three times is one borrower. Participants
+(20260901000022) are counted in their own column rather than folded in — somebody
+who got on the boat did not take custody of it.
+
+## Prospects — the target list
+
+`partner_prospects` (migration `20260901000038`) is who we want to supply, before
+they are partners. It is **not** an account: no key, no members, no onboarding, no
+way in. `approveApplication` remains the only thing that creates a `partners` row,
+which is what guarantees every partner has an owner who can actually sign in — a
+company that has never heard of us has none of that, and writing it into
+`partners` would mean inventing an owner for an account nobody asked for.
+
+Statuses are `identified → contacted → in_conversation → applied → won | lost`. A
+prospect marked `won` must name the partner it became and one marked `lost` must
+give a reason, both enforced by check constraints: "won" with nothing behind it is
+a claim, and "lost" with no reason is the row nobody can act on six months later.
+A prospect that has applied or been won cannot be deleted — it is now the record of
+how a live relationship started.
+
+Seeded with the incumbents this business is choosing not to compete with:
+Smartwaiver, WaiverForever, CleverWaiver, WaiverFile (waiver platforms), Roller
+and VenueSumo (booking platforms). All `identified`, which is the truth — nobody
+has written to any of them.
+
+**Carriers are not in that table.** Allianz Travel Insurance and Lockton Affinity
+are seeded as `carriers` rows in `prospect` status, because a carrier is the other
+direction entirely. Both carry an adapter name with no registered `CarrierClient`,
+so even if somebody flips one to `active` before the integration exists, the
+coverage service drops them from the quote rather than putting `MOCK-` policy
+numbers under a real insurer's name.
 
 ## Support
 
@@ -404,6 +495,19 @@ Stated plainly so nobody mistakes the shape above for a finished platform.
   offers "assign to me" and nothing else, because a staff picker has not been
   built and a field that takes a uuid is worse than no field.
 - **Partner-facing usage reporting.** `last_used_at` is coarse by design (stamped
-  at most hourly). There is no call volume, no attach rate, no revenue view.
+  at most hourly). There is no call volume, no attach rate, no revenue view. The
+  admin Overview shows the platform total; a partner cannot see their own share of
+  it.
+- **Linking an application back to its prospect.** `partner_prospects.application_id`
+  exists and nothing sets it. When a prospect fills in the public form, somebody
+  has to move the prospect to `applied` by hand — matching an application to a
+  prospect on an email domain is a guess, and a wrong one silently attributes
+  somebody else's application to a conversation we never had.
+- **Trend over time.** Every figure on the Overview is a total as of now, plus a
+  30-day count for agreements. There is no chart, no month-on-month, and no
+  snapshot table to build one from later.
+- **Owning a prospect.** `owner_staff_id` exists and the console does not set it,
+  for the same reason ticket assignment does not: a field that takes a uuid with no
+  staff picker is worse than no field.
 - **Switching between partners** for somebody who belongs to two. The console
   shows the first and says so.

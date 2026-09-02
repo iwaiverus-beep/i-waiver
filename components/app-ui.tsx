@@ -96,6 +96,46 @@ export function Note({
   );
 }
 
+/**
+ * One number, and what it is.
+ *
+ * `hint` is not decoration. A count with no denominator is the easiest thing on a
+ * dashboard to misread — "6 policies" means nothing until you know it is six out
+ * of fifteen quotes — so the tile has a place to say so, and the dashboard is
+ * written to use it.
+ */
+export function Stat({
+  label,
+  value,
+  hint,
+  tone = "plain",
+}: {
+  label: string;
+  value: ReactNode;
+  hint?: ReactNode;
+  tone?: "plain" | "accent";
+}) {
+  return (
+    <div
+      className={`rounded-2xl border px-5 py-4 ${
+        tone === "accent" ? "border-accent/30 bg-accent-soft" : "border-line bg-paper"
+      }`}
+    >
+      <p className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
+        {label}
+      </p>
+      <p
+        className={`mt-2 font-serif text-3xl tracking-tight tabular-nums ${
+          tone === "accent" ? "text-accent" : "text-ink"
+        }`}
+      >
+        {value}
+      </p>
+      {hint && <p className="mt-1.5 text-xs leading-relaxed text-ink-muted">{hint}</p>}
+    </div>
+  );
+}
+
 export function Empty({ children }: { children: ReactNode }) {
   return (
     <p className="py-6 text-center text-sm text-ink-muted">{children}</p>

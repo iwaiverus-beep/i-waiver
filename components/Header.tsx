@@ -9,10 +9,18 @@ import { AccountMenu } from "./AccountMenu";
 import { PreviewChip, usePreview } from "./PreviewGate";
 import { Mark } from "./Mark";
 
+/**
+ * Three audiences and then the company, which is the order they arrive in: a
+ * person lending a jet ski, a business lending a hundred, and a platform whose
+ * customers do both. `/partners` was reachable from the footer and from a link in
+ * an email and nowhere else — which is a strange place to leave the pitch to the
+ * one audience that brings the other two with it.
+ */
 const NAV = [
   { href: "/how-it-works", label: "How it works" },
   { href: "/individuals", label: "For individuals" },
   { href: "/businesses", label: "For businesses" },
+  { href: "/partners", label: "For partners" },
   { href: "/about", label: "About" },
 ];
 
