@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Container } from "@/components/ui";
+import { PageHeading } from "@/components/PageHeading";
 import { Empty, Note, Panel, Stat } from "@/components/app-ui";
 import { AdminNav } from "@/components/AdminNav";
 import { currentStaff } from "@/lib/platform/access";
@@ -55,11 +56,10 @@ export default async function OverviewPage() {
     <Container className="py-14 sm:py-20">
       <AdminNav role={staff.role} email={staff.email} />
 
-      <h1 className="font-serif text-3xl tracking-tight sm:text-4xl">Overview</h1>
-      <p className="mt-3 max-w-prose text-sm leading-relaxed text-ink-soft">
+      <PageHeading title="Overview">
         Everything on this page is the live platform. Sandbox traffic is counted
         separately and never folded in.
-      </p>
+      </PageHeading>
 
       {/* ------------------------------------------------------------------ */}
 

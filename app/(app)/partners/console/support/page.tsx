@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Container } from "@/components/ui";
+import { PageHeading } from "@/components/PageHeading";
 import { Panel } from "@/components/app-ui";
 import { PartnerNav } from "@/components/PartnerNav";
 import { SupportPanel, type Thread } from "@/components/SupportPanel";
@@ -44,12 +45,11 @@ export default async function PartnerSupportPage() {
     <Container className="py-14 sm:py-20">
       <PartnerNav partnerName={membership.partnerName} />
 
-      <h1 className="font-serif text-3xl tracking-tight sm:text-4xl">Support</h1>
-      <p className="mt-3 max-w-prose text-sm leading-relaxed text-ink-soft">
+      <PageHeading title="Support">
         Anything about the integration, the sandbox, a state, or a policy. Tickets
         raised here are visible to everyone on your team, so a colleague can pick
         one up without being forwarded a thread.
-      </p>
+      </PageHeading>
 
       <div className="mt-10 space-y-8">
         <Panel

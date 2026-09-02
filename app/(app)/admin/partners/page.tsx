@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Container } from "@/components/ui";
+import { PageHeading } from "@/components/PageHeading";
 import { Empty, Note, Panel, Stat } from "@/components/app-ui";
 import { AdminNav } from "@/components/AdminNav";
 import { NewProspectForm, ProspectList } from "@/components/ProspectTools";
@@ -53,15 +54,14 @@ export default async function PartnersPage() {
     <Container className="py-14 sm:py-20">
       <AdminNav role={staff.role} email={staff.email} />
 
-      <h1 className="font-serif text-3xl tracking-tight sm:text-4xl">Partners</h1>
-      <p className="mt-3 max-w-prose text-sm leading-relaxed text-ink-soft">
+      <PageHeading title="Partners">
         The platforms that put our cover in front of their customers, and the ones
         we want next. Insurers are on the{" "}
         <Link href="/admin/carriers" className="font-semibold text-accent underline">
           Carriers
         </Link>{" "}
         tab — they are the other side of the trade.
-      </p>
+      </PageHeading>
 
       <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Stat label="Partners" value={live.length} hint="Approved and not disabled." />

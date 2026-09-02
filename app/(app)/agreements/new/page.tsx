@@ -154,10 +154,17 @@ export default async function NewAgreementPage({
   return (
     <Container className={PAGE_PADDING}>
       <div className="mx-auto max-w-2xl">
-        <Link href="/dashboard" className="text-sm text-ink-muted hover:text-ink">
+        {/* Desktop only. On a phone the header logo already goes home, so this
+            row spends the most valuable band on the screen — the one above the
+            fold — repeating something the reader already has. On a wide screen it
+            stays: this page renders no AppNav, so it is the only way out. */}
+        <Link
+          href="/dashboard"
+          className="hidden text-sm text-ink-muted hover:text-ink sm:inline-block"
+        >
           ← Back
         </Link>
-        <h1 className="mt-4 font-serif text-3xl tracking-tight">Lend something</h1>
+        <h1 className="font-serif text-3xl tracking-tight sm:mt-4">Lend something</h1>
 
         {states.length === 0 ? (
           <div className="mt-8">

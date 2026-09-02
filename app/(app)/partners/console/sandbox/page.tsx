@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Container } from "@/components/ui";
+import { PageHeading } from "@/components/PageHeading";
 import { Note, Panel } from "@/components/app-ui";
 import { PartnerNav } from "@/components/PartnerNav";
 import { SandboxTester } from "@/components/SandboxTester";
@@ -24,12 +25,11 @@ export default async function SandboxPage() {
     <Container className="py-14 sm:py-20">
       <PartnerNav partnerName={membership.partnerName} />
 
-      <h1 className="font-serif text-3xl tracking-tight sm:text-4xl">Sandbox</h1>
-      <p className="mt-3 max-w-prose text-sm leading-relaxed text-ink-soft">
+      <PageHeading title="Sandbox">
         A sandbox key quotes and binds against a mock carrier, in every state,
         including the ones we are not admitted in yet — so you can finish the
         integration before your states open rather than after.
-      </p>
+      </PageHeading>
 
       <div className="mt-10 space-y-8">
         <Panel

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Container } from "@/components/ui";
+import { PageHeading } from "@/components/PageHeading";
 import { Empty, Note, Panel } from "@/components/app-ui";
 import { AdminNav } from "@/components/AdminNav";
 import { StaffManager } from "@/components/StaffManager";
@@ -47,12 +48,11 @@ export default async function StaffPage() {
     <Container className="py-14 sm:py-20">
       <AdminNav role={staff.role} email={staff.email} />
 
-      <h1 className="font-serif text-3xl tracking-tight sm:text-4xl">Staff</h1>
-      <p className="mt-3 max-w-prose text-sm leading-relaxed text-ink-soft">
+      <PageHeading title="Staff">
         Access is a row, not an attribute of an address. Revoking it ends the
         access on the next request — there is no cache and no second place it is
         remembered.
-      </p>
+      </PageHeading>
 
       <div className="mt-10 space-y-8">
         <Panel title="Who works here">

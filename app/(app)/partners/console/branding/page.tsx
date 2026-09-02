@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Container } from "@/components/ui";
+import { PageHeading } from "@/components/PageHeading";
 import { Note, Panel } from "@/components/app-ui";
 import { PartnerNav } from "@/components/PartnerNav";
 import { BrandingForm } from "@/components/BrandingForm";
@@ -33,11 +34,10 @@ export default async function BrandingPage() {
     <Container className="py-14 sm:py-20">
       <PartnerNav partnerName={membership.partnerName} />
 
-      <h1 className="font-serif text-3xl tracking-tight sm:text-4xl">Branding</h1>
-      <p className="mt-3 max-w-prose text-sm leading-relaxed text-ink-soft">
+      <PageHeading title="Branding">
         Your mark alongside ours in the embedded widget, so a customer who is
         halfway through your checkout does not feel handed off to a stranger.
-      </p>
+      </PageHeading>
 
       <div className="mt-10 space-y-8">
         <Panel

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Container } from "@/components/ui";
+import { PageHeading } from "@/components/PageHeading";
 import { Empty } from "@/components/app-ui";
 import { AdminNav } from "@/components/AdminNav";
 import { BarChart, LineChart, StatTile } from "@/components/charts";
@@ -118,15 +119,14 @@ export default async function TrendsPage() {
     <Container className="py-14 sm:py-20">
       <AdminNav role={staff.role} email={staff.email} />
 
-      <h1 className="font-serif text-3xl tracking-tight sm:text-4xl">Trends</h1>
-      <p className="mt-3 max-w-prose text-sm leading-relaxed text-ink-soft">
+      <PageHeading title="Trends">
         Ninety days, bucketed by UTC day. The standing totals are on{" "}
         <Link href="/admin/overview" className="text-accent underline">
           Overview
         </Link>
         ; this page is movement. A quiet day is a zero rather than a missing point,
         so a flat stretch reads as a flat stretch.
-      </p>
+      </PageHeading>
 
       <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatTile
