@@ -24,7 +24,7 @@ export async function GET(request: Request) {
   const next =
     rawNext && rawNext.startsWith("/") && !rawNext.startsWith("//")
       ? rawNext
-      : "/dashboard";
+      : "/assets";
 
   // The provider reports a refusal here rather than by failing the exchange —
   // someone who pressed Cancel on Google's consent screen lands with an error

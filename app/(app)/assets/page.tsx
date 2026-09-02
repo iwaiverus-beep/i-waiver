@@ -3,24 +3,38 @@ import { redirect } from "next/navigation";
 import { Container } from "@/components/ui";
 import { AppNav } from "@/components/AppNav";
 import { Empty } from "@/components/app-ui";
+import { PageIntro } from "@/components/PageIntro";
 import {
   AssetsManager,
   type Asset,
   type AssetOfferRow,
 } from "@/components/AssetsManager";
 import { userClient } from "@/lib/supabase/server";
+import { staffFor } from "@/lib/platform/access";
 import { ASSET_COLUMNS_WITH_PHOTOS } from "@/lib/assets/fields";
 
 export const metadata: Metadata = { title: "Things you lend" };
 export const dynamic = "force-dynamic";
 
-export default async function AssetsPage() {
+export default async function AssetsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ as?: string }>;
+}) {
   const supabase = await userClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   if (!user) redirect("/login?next=/assets");
+
+  // Staff land in the console, not here. Signing in now arrives on this
+  // screen, so the redirect /dashboard has always carried has to be on this
+  // one too - otherwise somebody who works here signs in and lands on their
+  // own, probably empty, list of things to lend. The `as=lender` parameter is
+  // the way back, exactly as it is there.
+  const { as } = await searchParams;
+  if (as !== "lender" && (await staffFor(user))) redirect("/admin");
 
   // The lender's own offers ride along, so the "suggest with…" picker opens
   // knowing what is already linked rather than fetching per item.
@@ -54,16 +68,13 @@ export default async function AssetsPage() {
   const orgOriginatorIds = (originators ?? []).map((row) => row.id as string);
 
   return (
-    <Container className="py-14 sm:py-20">
+    <Container className="pb-14 pt-0 sm:py-20">
       <AppNav />
-      <h1 className="font-serif text-3xl tracking-tight sm:text-4xl">
-        Things you lend
-      </h1>
-      <p className="mt-4 max-w-prose text-ink-soft">
+      <PageIntro title="Things you lend">
         Save what you lend once and pick it from a list each time. Details are
         frozen onto an agreement when you send it, so changing a value here later
         never alters an agreement already signed.
-      </p>
+      </PageIntro>
 
       {assets.length === 0 && (
         <div className="mt-8">

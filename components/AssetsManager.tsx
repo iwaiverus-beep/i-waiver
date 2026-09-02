@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { formatCents } from "@/lib/format";
 import {
@@ -159,48 +160,19 @@ export function AssetsManager({
   }
 
   return (
-    <div className="mt-10">
-      {!adding && (
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            onClick={() => setAdding(true)}
-            className="rounded-full bg-accent px-5 py-2.5 text-sm font-semibold text-paper transition-colors hover:bg-accent-hover"
-          >
-            Add something
-          </button>
-          {searchable && (
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search your things"
-              type="search"
-              aria-label="Search your things"
-              className="w-full max-w-xs rounded-full border border-line bg-paper px-4 py-2.5 text-sm text-ink outline-none focus:border-accent"
-            />
-          )}
-        </div>
-      )}
-
-      {adding && (
-        <AssetForm
-          heading="Add something you lend"
-          submitLabel="Save"
-          cancellable={assets.length > 0}
-          originatorKind={kindOf()}
-          onCancel={() => setAdding(false)}
-          onSaved={(asset) => {
-            setAssets((current) => [asset, ...current]);
-            setAdding(false);
-            // Straight into editing it, because photographs and suggestions both
-            // need a row to hang off and a lender who has just described their
-            // boat is the most likely person in the world to want to add a
-            // picture of it.
-            setEditingId(asset.id);
-          }}
+    <div className="mt-8 space-y-8">
+      {searchable && (
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search your things"
+          type="search"
+          aria-label="Search your things"
+          className="w-full max-w-xs rounded-full border border-line bg-paper px-4 py-2.5 text-sm text-ink outline-none focus:border-accent"
         />
       )}
 
-      <div className="mt-8 space-y-3">
+      <div className="space-y-3">
         {visible.map((asset) =>
           editingId === asset.id ? (
             <div key={asset.id} className="space-y-3">
@@ -211,6 +183,7 @@ export function AssetsManager({
                 cancellable
                 originatorKind={kindOf(asset)}
                 onCancel={() => setEditingId(null)}
+                onRemove={() => archive(asset)}
                 onSaved={(updated) => {
                   setAssets((current) =>
                     current.map((a) => (a.id === updated.id ? updated : a)),
@@ -251,7 +224,6 @@ export function AssetsManager({
                 setAdding(false);
                 setEditingId(asset.id);
               }}
-              onRemove={() => archive(asset)}
             />
           ),
         )}
@@ -262,6 +234,44 @@ export function AssetsManager({
           </p>
         )}
       </div>
+
+      {/*
+        Under the list rather than over it. Adding something is done once per
+        thing you own; picking one to lend is done every weekend, so the cards
+        get the top of the screen and the button waits at the end of them. The
+        form opens down here too, where the button was pressed.
+      */}
+      {adding ? (
+        <AssetForm
+          heading="Add something you lend"
+          submitLabel="Save"
+          cancellable={assets.length > 0}
+          originatorKind={kindOf()}
+          onCancel={() => setAdding(false)}
+          onSaved={(asset) => {
+            setAssets((current) => [asset, ...current]);
+            setAdding(false);
+            // Straight into editing it, because photographs and suggestions both
+            // need a row to hang off and a lender who has just described their
+            // boat is the most likely person in the world to want to add a
+            // picture of it.
+            setEditingId(asset.id);
+          }}
+        />
+      ) : (
+        <button
+          onClick={() => {
+            // Whichever card was open closes. Two forms on one screen, one of
+            // them halfway up the list, is a screen nobody can find their place
+            // in — the same reason Edit closes the add form.
+            setEditingId(null);
+            setAdding(true);
+          }}
+          className="rounded-full bg-accent px-5 py-2.5 text-sm font-semibold text-paper transition-colors hover:bg-accent-hover"
+        >
+          Add something
+        </button>
+      )}
     </div>
   );
 }
@@ -271,12 +281,10 @@ function AssetRow({
   asset,
   offerCount,
   onEdit,
-  onRemove,
 }: {
   asset: Asset;
   offerCount: number;
   onEdit: () => void;
-  onRemove: () => void;
 }) {
   const lead = orderedPhotos(asset.asset_photos)[0];
   const rate = formatRate(asset.rate_cents, asset.rate_unit);
@@ -317,18 +325,25 @@ function AssetRow({
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
+      {/*
+        Lending it is the point of the screen, so it leads and it is the only
+        thing on the row wearing the accent colour. Edit sits at the far right,
+        where changing the record reads as a detour rather than the next step.
+        Removing is not offered here at all — it lives inside the edit form, one
+        deliberate step further in.
+      */}
+      <div className="flex flex-1 items-center gap-2">
+        <Link
+          href={`/agreements/new?asset=${asset.id}`}
+          className="rounded-full bg-accent px-4 py-2 text-xs font-semibold text-paper transition-colors hover:bg-accent-hover"
+        >
+          Lend
+        </Link>
         <button
           onClick={onEdit}
-          className="rounded-full border border-line px-4 py-2 text-xs font-semibold text-ink transition-colors hover:border-ink/40"
+          className="ml-auto rounded-full border border-line px-4 py-2 text-xs font-semibold text-ink transition-colors hover:border-ink/40"
         >
           Edit
-        </button>
-        <button
-          onClick={onRemove}
-          className="rounded-full px-3 py-2 text-xs font-semibold text-ink-muted transition-colors hover:text-flag"
-        >
-          Remove
         </button>
       </div>
     </div>
@@ -349,6 +364,7 @@ function AssetForm({
   originatorKind,
   onSaved,
   onCancel,
+  onRemove,
 }: {
   asset?: Asset;
   heading: string;
@@ -357,6 +373,12 @@ function AssetForm({
   originatorKind: OriginatorKind;
   onSaved: (asset: Asset) => void;
   onCancel: () => void;
+  /**
+   * Only passed when editing. Taking something off the list used to be a button
+   * on the row, a tap away from Edit, which is a bad neighbour for a destructive
+   * action — it now lives behind Edit with the rest of the record.
+   */
+  onRemove?: () => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -600,6 +622,15 @@ function AssetForm({
             className="rounded-full border border-line px-5 py-2.5 text-sm font-semibold text-ink"
           >
             Cancel
+          </button>
+        )}
+        {onRemove && (
+          <button
+            type="button"
+            onClick={onRemove}
+            className="ml-auto rounded-full px-4 py-2.5 text-sm font-semibold text-ink-muted transition-colors hover:text-flag"
+          >
+            Remove
           </button>
         )}
       </div>

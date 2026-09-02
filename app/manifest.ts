@@ -4,10 +4,14 @@ import { BRAND } from "@/lib/brand";
 /**
  * What the phone reads when someone adds this to their home screen.
  *
- * `start_url` is /dashboard rather than /: someone who installed this is a
- * lender, and a lender opening the app wants their agreements, not the marketing
- * page that persuaded them to install it. Signed-out visitors get bounced to
- * /login by the middleware, which is the right landing anyway.
+ * `start_url` is /assets rather than /: someone who installed this is a lender,
+ * and a lender opening the app wants the things they lend — the screen every
+ * loan starts from — not the marketing page that persuaded them to install it.
+ * Signed-out visitors get bounced to /login by the middleware, which is the
+ * right landing anyway.
+ *
+ * The same destination signing in uses. An installed app that opens somewhere
+ * other than where signing in lands is two front doors into one product.
  *
  * Maskable icons are separate entries rather than a `purpose: "any maskable"` on
  * one. Android crops maskable icons to the launcher's shape, and a mark drawn
@@ -20,7 +24,7 @@ export default function manifest(): MetadataRoute.Manifest {
     short_name: BRAND.name,
     description:
       "Lend your gear on a signed agreement instead of a handshake, with cover for the loan period built into the same signature.",
-    start_url: "/dashboard",
+    start_url: "/assets",
     scope: "/",
     display: "standalone",
     orientation: "portrait",
