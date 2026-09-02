@@ -48,6 +48,17 @@ const ARCHIVED_OPTION = "shelf:archived";
 /** What the box reads before anybody has picked anything. Never a real value. */
 const PLACEHOLDER_OPTION = "";
 
+/**
+ * The states where the next thing to do is about a signature.
+ *
+ * A card in one of these sends its status badge to the signing panel on the
+ * agreement (`#signing`) rather than the top of the page. The same three the
+ * detail page uses to decide whether that panel exists at all — if they ever
+ * disagree, the link lands on an anchor that is not there and the page simply
+ * opens at the top, which is the old behaviour rather than a broken one.
+ */
+const SIGNING_STATUSES = ["draft", "sent", "partially_signed"];
+
 type Counts = { active: number; drafts: number; awaiting: number; archived: number };
 
 export function AgreementsList({
@@ -461,39 +472,69 @@ function AgreementRow({
         aria-label={`Open the agreement with ${row.borrower_name ?? "no borrower yet"}`}
       />
 
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <p className="text-base font-semibold text-ink">
-            {row.borrower_name ?? "No borrower yet"}
+      <div className="min-w-0">
+        <p className="text-base font-semibold text-ink">
+          {row.borrower_name ?? "No borrower yet"}
+        </p>
+        <p className="mt-1 text-sm text-ink-soft">
+          {row.item_count > 1
+            ? `${row.item_count} items`
+            : row.activity_class.replace(/_/g, " ")}{" "}
+          in {row.jurisdiction} · {formatDate(row.starts_at)} to{" "}
+          {formatDate(row.ends_at)}
+        </p>
+        {outstanding.length > 0 && row.status !== "draft" && (
+          <p className="mt-1.5 text-xs text-ink-muted">
+            Waiting on {waitingOn(outstanding, signers, viewerEmail)}
           </p>
-          <p className="mt-1 text-sm text-ink-soft">
-            {row.item_count > 1
-              ? `${row.item_count} items`
-              : row.activity_class.replace(/_/g, " ")}{" "}
-            in {row.jurisdiction} · {formatDate(row.starts_at)} to{" "}
-            {formatDate(row.ends_at)}
-          </p>
-          {outstanding.length > 0 && row.status !== "draft" && (
-            <p className="mt-1.5 text-xs text-ink-muted">
-              Waiting on {waitingOn(outstanding, signers, viewerEmail)}
-            </p>
-          )}
-        </div>
+        )}
+      </div>
 
-        <div className="relative z-20 flex shrink-0 flex-col items-end gap-2">
+      {/*
+        The two things you can do to an agreement without opening it, on their
+        own line at the foot of the card: filing on the left, where a row of
+        cards makes one column of it, and the state on the right.
+
+        `z-20` lifts both clear of the anchor covering the card, which is why
+        they can be pressed at all.
+      */}
+      <div className="relative z-20 mt-4 flex flex-wrap items-center justify-between gap-3">
+        {row.legal_hold_at ? (
+          <span className="rounded-full border border-flag/30 bg-flag/[0.06] px-4 py-1.5 text-xs font-semibold text-flag">
+            Legal hold
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={onArchive}
+            className="rounded-full border border-line px-4 py-1.5 text-xs font-semibold text-ink-soft transition-colors hover:border-ink/40 hover:text-ink"
+          >
+            {archived ? "Put back on the list" : "Archive"}
+          </button>
+        )}
+
+        {/*
+          The state is the answer to "what is this waiting on", so it is the way
+          to the thing that answers it: a part-signed agreement opens on its
+          signing links rather than at the top of a long page. The card itself
+          still opens the agreement — this is the same journey with the last
+          step already taken.
+        */}
+        <Link
+          href={
+            SIGNING_STATUSES.includes(row.status)
+              ? `/agreements/${row.id}#signing`
+              : `/agreements/${row.id}`
+          }
+          aria-label={
+            SIGNING_STATUSES.includes(row.status)
+              ? "Open the signing details"
+              : "Open the agreement"
+          }
+          className="rounded-full transition-opacity hover:opacity-70"
+        >
           <StatusBadge status={row.status} />
-          {row.legal_hold_at ? (
-            <span className="text-xs font-semibold text-flag">Legal hold</span>
-          ) : (
-            <button
-              type="button"
-              onClick={onArchive}
-              className="text-xs font-semibold text-ink-muted transition-colors hover:text-ink"
-            >
-              {archived ? "Put back on the list" : "File away"}
-            </button>
-          )}
-        </div>
+        </Link>
       </div>
     </div>
   );

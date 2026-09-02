@@ -33,18 +33,23 @@ export function StatusBadge({ status }: { status: string }) {
 }
 
 export function Panel({
+  id,
   title,
   description,
   action,
   children,
 }: {
+  /** An anchor to link at, e.g. `#signing` from the agreement list. */
+  id?: string;
   title: string;
   description?: string;
   action?: ReactNode;
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-2xl border border-line bg-paper">
+    // `scroll-mt-24` because the header is sticky: without it, jumping to a
+    // panel parks its heading underneath the header.
+    <section id={id} className="scroll-mt-24 rounded-2xl border border-line bg-paper">
       <header className="flex items-start justify-between gap-4 rounded-t-2xl border-b border-line bg-surface/70 px-6 py-4">
         <div>
           <h2 className="text-sm font-semibold text-ink">{title}</h2>

@@ -356,6 +356,9 @@ export default async function AgreementPage({
           {["draft", "sent", "partially_signed"].includes(agreement.status) &&
             borrower && (
             <Panel
+              // What the status badge on the agreement list links at. The three
+              // statuses that render this panel are the three that link to it.
+              id="signing"
               title={agreement.status === "draft" ? "Reaching them" : "Signing links"}
               description={
                 agreement.status === "draft"
