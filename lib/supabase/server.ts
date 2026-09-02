@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { supabaseAnonKey, supabaseUrl } from "@/lib/env";
@@ -34,9 +35,19 @@ export async function userClient() {
   });
 }
 
-/** The signed-in user, or null. */
-export async function currentUser() {
+/**
+ * The signed-in user, or null.
+ *
+ * Deduplicated per request. `auth.getUser()` is a network round trip to the auth
+ * server — it verifies the token rather than trusting the cookie, which is the
+ * behaviour we want — and several things ask this question during one render.
+ * `/api/profile` is the sharp case: the header fetches it on every page in the
+ * product, and it resolves the session for the profile and again for the staff
+ * check. `cache()` makes the second and third calls free for the life of the
+ * request, and changes nothing about what is returned.
+ */
+export const currentUser = cache(async () => {
   const supabase = await userClient();
   const { data } = await supabase.auth.getUser();
   return data.user ?? null;
-}
+});

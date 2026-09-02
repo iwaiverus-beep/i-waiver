@@ -27,13 +27,18 @@ type Me = {
   full_name: string | null;
   email: string | null;
   avatar_url: string | null;
+  /** Whether this account works here. Decided by the server; see /api/profile. */
+  is_staff: boolean;
 };
 
 /** Fired by the account screen when a name or picture changes, so this restacks without a reload. */
 export const PROFILE_UPDATED_EVENT = "iwaiver:profile-updated";
 
 const LINKS = [
-  { href: "/dashboard", label: "Your agreements" },
+  // `?as=lender` matters only for staff, whom /dashboard otherwise redirects into
+  // the console. It is harmless for everybody else, and carrying it
+  // unconditionally beats two versions of the same list that could drift apart.
+  { href: "/dashboard?as=lender", label: "Your agreements" },
   { href: "/account", label: "Your profile" },
   { href: "/account#email", label: "Email address" },
   { href: "/account#password", label: "Password" },
@@ -57,6 +62,7 @@ export function AccountMenu() {
         full_name: body.profile?.full_name ?? null,
         email: body.profile?.email ?? null,
         avatar_url: body.profile?.avatar_url ?? null,
+        is_staff: body.is_staff === true,
       });
     } catch {
       // The badge falls back to initials from whatever the session knows. A
@@ -74,7 +80,14 @@ export function AccountMenu() {
         if (cancelled) return;
         setState(data.user ? "in" : "out");
         if (data.user) {
-          setMe({ full_name: null, email: data.user.email ?? null, avatar_url: null });
+          setMe({
+            full_name: null,
+            email: data.user.email ?? null,
+            avatar_url: null,
+            // Assumed false until /api/profile says otherwise. A link that flickers
+            // into existence is better than one that flickers out.
+            is_staff: false,
+          });
           void loadProfile();
         }
       });
@@ -87,6 +100,7 @@ export function AccountMenu() {
             full_name: null,
             email: session.user.email ?? null,
             avatar_url: null,
+            is_staff: false,
           });
           void loadProfile();
         } else {
@@ -223,6 +237,32 @@ export function AccountMenu() {
               {email && <p className="truncate text-xs text-ink-muted">{email}</p>}
             </div>
           </div>
+
+          {/*
+            The way into the console, for the people who work here.
+
+            First and above a rule, because for a staff member it is the reason
+            they signed in — and because until it existed there was no link to
+            /admin anywhere in the product. A super admin had to know to type the
+            URL, which is a poor way to find out you have the widest grant the
+            product has.
+
+            Rendered only when the server says so. That is presentation, not
+            authorisation: /admin answers `notFound()` to anybody who is not
+            staff whether or not this link is on their screen.
+          */}
+          {me?.is_staff && (
+            <div className="border-b border-line py-1.5">
+              <Link
+                href="/admin"
+                role="menuitem"
+                onClick={() => setOpen(false)}
+                className="block px-4 py-2 text-sm font-semibold text-accent transition-colors hover:bg-surface"
+              >
+                Admin console
+              </Link>
+            </div>
+          )}
 
           <div className="py-1.5">
             {LINKS.map((link) => (

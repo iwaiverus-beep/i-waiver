@@ -7,6 +7,7 @@ import { jsonError, readJson, text } from "@/lib/http";
 import { isStateCode } from "@/lib/jurisdictions";
 import { asIanaZone } from "@/lib/format";
 import { PROFILE_COLUMNS, avatarUrl, readProfile, type Profile } from "@/lib/profile";
+import { currentStaff } from "@/lib/platform/access";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,7 +32,21 @@ export async function GET() {
     if (!profile) {
       return NextResponse.json({ error: "Sign in first." }, { status: 401 });
     }
-    return NextResponse.json({ profile });
+
+    // Whether YOU are staff, so the account menu can offer the console.
+    //
+    // Not a leak of the rule that whether an admin console exists is itself
+    // information: this answers the question only about the caller, and a person
+    // who is not staff gets `false`, which they could already work out from being
+    // unable to open it. Without this there is no link to /admin anywhere in the
+    // signed-in shell and the console is reachable only by typing the URL.
+    const staff = await currentStaff();
+
+    return NextResponse.json({
+      profile,
+      is_staff: staff !== null,
+      staff_role: staff?.role ?? null,
+    });
   } catch (error) {
     return jsonError(error);
   }

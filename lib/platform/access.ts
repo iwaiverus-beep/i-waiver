@@ -77,10 +77,24 @@ async function bootstrapGrant(
   return true;
 }
 
-/** The signed-in staff member, or null if this person does not work here. */
-export async function currentStaff(): Promise<Staff | null> {
-  const user = await currentUser();
-  if (!user?.email) return null;
+/**
+ * The same question, asked about a user the caller has already resolved.
+ *
+ * Exists because `auth.getUser()` is a round trip and `currentUser()` does not
+ * cache: a page or route that has already resolved the session and then calls
+ * `currentStaff()` pays for it twice. `/api/profile` is fetched by the header on
+ * every single page view, so that second call is the difference between one
+ * network hop per page and two.
+ *
+ * Identical logic to `currentStaff`, which now delegates here — there is no
+ * cheaper-but-slightly-different check to get out of step with the real one.
+ */
+export async function staffFor(user: {
+  id: string;
+  email?: string | null;
+  email_confirmed_at?: string | null;
+}): Promise<Staff | null> {
+  if (!user.email) return null;
 
   // An unconfirmed address is a claim, not a fact, and staff access is the last
   // place to accept a claim.
@@ -111,6 +125,13 @@ export async function currentStaff(): Promise<Staff | null> {
   }
 
   return null;
+}
+
+/** The signed-in staff member, or null if this person does not work here. */
+export async function currentStaff(): Promise<Staff | null> {
+  const user = await currentUser();
+  if (!user) return null;
+  return staffFor(user);
 }
 
 /** Resolves the caller, or throws. Use at the top of every admin route. */

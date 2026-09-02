@@ -21,7 +21,14 @@ import { usePathname } from "next/navigation";
  * three places inside the product.
  */
 const LINKS = [
-  { href: "/dashboard", label: "Agreements" },
+  // `?as=lender` is what tells /dashboard not to bounce a staff member into the
+  // console. Without it, somebody who works here and also lends their own things
+  // could reach the other two tabs and never get back to the first.
+  //
+  // Carried for everyone rather than only for staff: this component does not know
+  // who is reading it, the parameter does nothing for anybody else, and a nav with
+  // two versions of the same link is a nav that will disagree with itself.
+  { href: "/dashboard?as=lender", label: "Agreements" },
   { href: "/assets", label: "Things you lend" },
   { href: "/contacts", label: "People" },
 ];
@@ -46,7 +53,11 @@ export function AppNav() {
       */}
       <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
         {LINKS.map((link) => {
-          const active = pathname === link.href || pathname.startsWith(`${link.href}/`);
+          // Compared on the path alone. `usePathname` never carries a query
+          // string, so matching the whole href would leave the Agreements tab
+          // permanently unhighlighted now that it carries `?as=lender`.
+          const path = link.href.split("?")[0];
+          const active = pathname === path || pathname.startsWith(`${path}/`);
           return (
             <Link
               key={link.href}
