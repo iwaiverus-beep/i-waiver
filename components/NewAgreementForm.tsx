@@ -194,6 +194,42 @@ export function NewAgreementForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /**
+   * Arrived by pressing Lend on a saved item, so open on the borrower.
+   *
+   * The first question — what are you lending — is already answered and ticked
+   * further up the form, and on a phone that is a screen and a half of picking
+   * before the next unanswered thing. Scrolling to it says "this bit is done"
+   * more clearly than any wording could, and the item stays where it is for
+   * anybody who scrolls back to check it.
+   *
+   * A prefill carrying items but no request is the shape only that link makes:
+   * a scanned request has a `requestId`, and "Lend again" from a person passes
+   * `initialContactId` with no prefill at all — that one lands at the top,
+   * where its own unanswered question is.
+   */
+  const openAtBorrower = Boolean(
+    prefill && !prefill.requestId && prefill.assetIds.length > 0,
+  );
+
+  useEffect(() => {
+    if (!openAtBorrower) return;
+    // Two frames out, after the router has put the new page at the top and the
+    // browser has laid it out. Scrolling during the mount paint gets undone.
+    let inner = 0;
+    const outer = requestAnimationFrame(() => {
+      inner = requestAnimationFrame(() => {
+        document
+          .getElementById("borrower")
+          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    });
+    return () => {
+      cancelAnimationFrame(outer);
+      cancelAnimationFrame(inner);
+    };
+  }, [openAtBorrower]);
+
   // Ticked items from the saved list, in the order they were ticked — that
   // order becomes Schedule A on the document, so it is a list and not a Set.
   // An asset-level code names the item, so a scanned request arrives with it
@@ -512,7 +548,9 @@ export function NewAgreementForm({
         )}
       </fieldset>
 
-      <fieldset className="space-y-5">
+      {/* `scroll-mt-24` clears the sticky header when this section is scrolled
+          to — see `openAtBorrower` above. */}
+      <fieldset id="borrower" className="scroll-mt-24 space-y-5">
         <Legend
           title="Who is borrowing it?"
           hint="They will get an email with a link. They do not need an account and will never be asked to make one."
