@@ -67,7 +67,7 @@ export default function PartnersPage() {
 
       <Section>
         <Eyebrow>Who this is for</Eyebrow>
-        <H2>Two kinds of partner, one interface.</H2>
+        <H2>Three kinds of partner, one interface.</H2>
         <div className="mt-12 grid gap-6 md:grid-cols-3">
           <Card title="Waiver platforms">
             You take the release. We attach cover for the activity to it, priced

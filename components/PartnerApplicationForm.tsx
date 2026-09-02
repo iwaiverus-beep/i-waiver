@@ -64,6 +64,12 @@ export function PartnerApplicationForm() {
     );
   }
 
+  const allStatesSelected = states.length === US_STATES.length;
+
+  function toggleAllStates() {
+    setStates(allStatesSelected ? [] : [...US_STATES]);
+  }
+
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
@@ -200,8 +206,20 @@ export function PartnerApplicationForm() {
       </div>
 
       <fieldset className="mt-7">
-        <legend className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-ink-soft">
-          States you operate in
+        <legend className="mb-2 flex w-full flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+          <span className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-soft">
+            States you operate in
+          </span>
+          <span className="flex items-baseline gap-3 text-xs">
+            <span className="text-ink-muted">{states.length} selected</span>
+            <button
+              type="button"
+              onClick={toggleAllStates}
+              className="font-semibold text-accent underline-offset-4 hover:underline"
+            >
+              {allStatesSelected ? "Clear all" : "Select all"}
+            </button>
+          </span>
         </legend>
         <p className="mb-3 text-xs leading-relaxed text-ink-muted">
           These agreements are governed by state law and coverage availability
