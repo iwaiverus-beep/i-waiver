@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { Container, PAGE_PADDING } from "@/components/ui";
 import { AppNav } from "@/components/AppNav";
 import { Empty } from "@/components/app-ui";
+import { PageIntro } from "@/components/PageIntro";
 import { ContactsManager, type Contact } from "@/components/ContactsManager";
 import { userClient } from "@/lib/supabase/server";
 
@@ -29,14 +30,11 @@ export default async function ContactsPage() {
   return (
     <Container className={PAGE_PADDING}>
       <AppNav />
-      <h1 className="font-serif text-3xl tracking-tight sm:text-4xl">
-        People you lend to
-      </h1>
-      <p className="mt-4 max-w-prose text-ink-soft">
+      <PageIntro title="People you lend to">
         Saved so you are not retyping a phone number every time. These details are
         copied onto an agreement when you create one — editing someone here never
         changes an agreement they have already signed.
-      </p>
+      </PageIntro>
 
       {contacts.length === 0 && (
         <div className="mt-8">
