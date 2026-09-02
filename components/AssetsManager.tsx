@@ -326,25 +326,25 @@ function AssetRow({
       </div>
 
       {/*
-        Lending it is the point of the screen, so it leads and it is the only
-        thing on the row wearing the accent colour. Edit sits at the far right,
-        where changing the record reads as a detour rather than the next step.
-        Removing is not offered here at all — it lives inside the edit form, one
-        deliberate step further in.
+        Lending it is the point of the screen and it is the only thing on the
+        row wearing the accent colour, so it takes the far right — the end of
+        the line a reader arrives at last and the side a thumb rests on. Edit is
+        the quieter of the two and holds the left. Removing is not offered here
+        at all: it lives inside the edit form, one deliberate step further in.
       */}
       <div className="flex flex-1 items-center gap-2">
-        <Link
-          href={`/agreements/new?asset=${asset.id}`}
-          className="rounded-full bg-accent px-4 py-2 text-xs font-semibold text-paper transition-colors hover:bg-accent-hover"
-        >
-          Lend
-        </Link>
         <button
           onClick={onEdit}
-          className="ml-auto rounded-full border border-line px-4 py-2 text-xs font-semibold text-ink transition-colors hover:border-ink/40"
+          className="rounded-full border border-line px-4 py-2 text-xs font-semibold text-ink transition-colors hover:border-ink/40"
         >
           Edit
         </button>
+        <Link
+          href={`/agreements/new?asset=${asset.id}`}
+          className="ml-auto rounded-full bg-accent px-4 py-2 text-xs font-semibold text-paper transition-colors hover:bg-accent-hover"
+        >
+          Lend
+        </Link>
       </div>
     </div>
   );
