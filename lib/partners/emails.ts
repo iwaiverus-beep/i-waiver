@@ -1,7 +1,7 @@
 import "server-only";
 
 import { BRAND } from "@/lib/brand";
-import { sendEmail } from "@/lib/email";
+import { sendNotice } from "@/lib/email";
 import { siteOrigin, supportEmail } from "@/lib/env";
 
 /**
@@ -18,24 +18,7 @@ import { siteOrigin, supportEmail } from "@/lib/env";
  * rolling back a decision somebody made.
  */
 
-async function send(message: {
-  to: string;
-  subject: string;
-  lines: string[];
-}): Promise<void> {
-  try {
-    await sendEmail({
-      to: message.to,
-      subject: message.subject,
-      text: [...message.lines, "", `— ${BRAND.name}`].join("\n"),
-    });
-  } catch (error) {
-    console.error(
-      `partner email "${message.subject}" to ${message.to} failed:`,
-      (error as Error).message,
-    );
-  }
-}
+const send = sendNotice;
 
 export function partnerApplicationReceived(input: {
   to: string;

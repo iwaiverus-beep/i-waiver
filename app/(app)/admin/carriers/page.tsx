@@ -9,7 +9,7 @@ import { currentStaff } from "@/lib/platform/access";
 import { staffCan } from "@/lib/platform/roles";
 import {
   CARRIER_KIND_LABELS,
-  CARRIER_STATUS_LABELS,
+  carrierStageLabel,
   listCarriers,
   type CarrierKind,
   type CarrierStatus,
@@ -84,8 +84,7 @@ export default async function CarriersPage() {
                               : "border-line bg-surface text-ink-soft"
                         }`}
                       >
-                        {CARRIER_STATUS_LABELS[carrier.status as CarrierStatus] ??
-                          carrier.status}
+                        {carrierStageLabel(carrier)}
                       </span>
                     </Link>
                   </li>

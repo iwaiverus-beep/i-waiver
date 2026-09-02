@@ -63,6 +63,30 @@ export const CARRIER_STATUS_LABELS: Record<CarrierStatus, string> = {
   terminated: "Terminated",
 };
 
+/**
+ * What the console should call this carrier's stage.
+ *
+ * `prospect` covers two situations that are not the same to the person reading
+ * the screen: a name somebody typed in from a list, and a carrier who applied and
+ * whom we approved. Both are pre-contract and neither may quote, so they are
+ * correctly the same `status` — but showing "Prospect" against a company we sent
+ * an approval email to reads as though the approval never happened.
+ *
+ * A label rather than a sixth enum value. `status` gates quoting through
+ * `available_carrier_products`, and widening something that gates quoting to
+ * carry a fact about our sales process is how a filter eventually lets the wrong
+ * row through.
+ */
+export function carrierStageLabel(carrier: {
+  status: CarrierStatus;
+  approved_at?: string | null;
+}): string {
+  if (carrier.status === "prospect" && carrier.approved_at) {
+    return "Approved — onboarding";
+  }
+  return CARRIER_STATUS_LABELS[carrier.status] ?? carrier.status;
+}
+
 export const FILING_STATUSES: FilingStatus[] = [
   "not_filed",
   "filed",
@@ -98,6 +122,8 @@ export type Carrier = {
   notes: string | null;
   created_at: string;
   activated_at: string | null;
+  /** When an application was approved into this row. Never gates quoting. */
+  approved_at: string | null;
 };
 
 export async function listCarriers(db: SupabaseClient): Promise<Carrier[]> {
@@ -139,6 +165,12 @@ export async function createCarrier(
     contactName?: string | null;
     contactEmail?: string | null;
     notes?: string | null;
+    /**
+     * Set only when the row is being opened from an approved application. A
+     * carrier somebody typed in from a list was never approved of anything, and
+     * dating that would put a decision in the record that nobody made.
+     */
+    approvedAt?: Date | null;
   },
 ): Promise<Carrier> {
   // A carrier is created as a PROSPECT, never active. Only
@@ -159,6 +191,7 @@ export async function createCarrier(
       contact_email: input.contactEmail ?? null,
       notes: input.notes ?? null,
       status: "prospect",
+      approved_at: input.approvedAt?.toISOString() ?? null,
     })
     .select("*")
     .single();
@@ -406,7 +439,7 @@ export async function setCredential(
 
 /** Everything the carrier detail screen shows. Never a secret. */
 export async function carrierDetail(db: SupabaseClient, carrierId: string) {
-  const [carrier, products, credentials, events] = await Promise.all([
+  const [carrier, products, credentials, events, submissions, link] = await Promise.all([
     db.from("carriers").select("*").eq("id", carrierId).maybeSingle(),
     db
       .from("carrier_products")
@@ -428,6 +461,20 @@ export async function carrierDetail(db: SupabaseClient, carrierId: string) {
       .eq("carrier_id", carrierId)
       .order("received_at", { ascending: false })
       .limit(20),
+    db
+      .from("carrier_submissions")
+      .select("*")
+      .eq("carrier_id", carrierId)
+      .order("submitted_at", { ascending: false })
+      .limit(10),
+    db
+      .from("carrier_onboarding_links")
+      .select("id, carrier_id, sent_to, expires_at, used_at, revoked_at, created_at")
+      .eq("carrier_id", carrierId)
+      .is("revoked_at", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
   ]);
 
   return {
@@ -435,5 +482,9 @@ export async function carrierDetail(db: SupabaseClient, carrierId: string) {
     products: products.data ?? [],
     credentials: credentials.data ?? [],
     events: events.data ?? [],
+    submissions: submissions.data ?? [],
+    // The live invitation, if there is one. Deliberately without the token hash:
+    // a screen can do nothing with it except leak that one exists.
+    link: link.data ?? null,
   };
 }

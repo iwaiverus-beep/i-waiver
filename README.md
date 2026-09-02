@@ -52,6 +52,7 @@ Optional, for the partner and admin consoles:
 | `IWAIVER_BOOTSTRAP_ADMINS` | Comma-separated addresses that become super admins on first sign-in. The only way into an empty `/admin`. Clear it once real staff rows exist — an address left here cannot be revoked from inside the product. |
 | `PARTNER_NOTIFICATIONS_EMAIL` | Where a new partner application is announced. Without it the application is still saved, and a warning says nobody was told. |
 | `SUPPORT_EMAIL` | The address customers are pointed at. Defaults to `support@` the brand domain. |
+| `PARTNER_TEAM_EMAIL` | Where a partner or carrier is pointed, and where their replies land. Their questions are about contracts, filings and integrations, which a support queue cannot answer. Defaults to `partners@` the brand domain. |
 
 Grant yourself admin access the first time:
 

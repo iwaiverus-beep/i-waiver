@@ -105,6 +105,22 @@ export const partnerNotificationEmail = () =>
 export const supportEmail = () =>
   optional("SUPPORT_EMAIL") ?? `support@${BRAND.domain}`;
 
+/**
+ * The address a partner or a carrier is told to write to, and the name that
+ * signs the mail we send them.
+ *
+ * Separate from `supportEmail` on purpose. Support answers questions about an
+ * account that already works; a carrier being onboarded has no account and no
+ * question a support queue can answer — theirs are about contracts, filings and
+ * an integration, and they belong with the people running the pipeline. Pointing
+ * a carrier at support is how a question about a filing ends up behind a queue of
+ * password resets.
+ */
+export const partnerTeamEmail = () =>
+  optional("PARTNER_TEAM_EMAIL") ?? `partners@${BRAND.domain}`;
+
+export const PARTNER_TEAM_NAME = "i-Waiver Partner Team";
+
 export const resendApiKey = () => optional("RESEND_API_KEY");
 
 /**

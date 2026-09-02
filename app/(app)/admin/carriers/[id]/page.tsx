@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { Container } from "@/components/ui";
 import { Empty, Panel, Row } from "@/components/app-ui";
 import { AdminNav } from "@/components/AdminNav";
+import { CarrierOnboardingPanel } from "@/components/CarrierOnboardingPanel";
 import {
   CarrierStatusControl,
   CredentialForm,
@@ -14,7 +15,7 @@ import { currentStaff } from "@/lib/platform/access";
 import { staffCan } from "@/lib/platform/roles";
 import {
   CARRIER_KIND_LABELS,
-  CARRIER_STATUS_LABELS,
+  carrierStageLabel,
   FILING_STATUS_LABELS,
   carrierDetail,
   type CarrierKind,
@@ -45,7 +46,8 @@ export default async function CarrierPage({
   const staff = await currentStaff();
   if (!staff) notFound();
 
-  const { carrier, products, credentials, events } = await carrierDetail(staff.db, id);
+  const { carrier, products, credentials, events, submissions, link } =
+    await carrierDetail(staff.db, id);
   if (!carrier) notFound();
 
   const activities = await listActivityClasses(staff.db);
@@ -88,7 +90,7 @@ export default async function CarrierPage({
                 : "border-line bg-surface text-ink-soft"
           }`}
         >
-          {CARRIER_STATUS_LABELS[carrier.status as CarrierStatus] ?? carrier.status}
+          {carrierStageLabel(carrier)}
         </span>
       </div>
 
@@ -153,6 +155,19 @@ export default async function CarrierPage({
             status={carrier.status}
             adapter={carrier.adapter}
             adapterRegistered={adapterRegistered}
+            canManage={canManage}
+          />
+        </Panel>
+
+        <Panel
+          title="Onboarding"
+          description="What we asked them for, and what they sent back."
+        >
+          <CarrierOnboardingPanel
+            carrierId={carrier.id}
+            contactEmail={carrier.contact_email}
+            link={link}
+            submissions={submissions}
             canManage={canManage}
           />
         </Panel>

@@ -10,6 +10,8 @@ import {
 } from "@/lib/partners/emails";
 import { partnerNotificationEmail } from "@/lib/env";
 import { createCarrier } from "@/lib/coverage/admin";
+import { createOnboardingLink } from "@/lib/coverage/onboarding";
+import { carrierApproved } from "@/lib/coverage/emails";
 import type { Staff } from "@/lib/platform/access";
 import { logStaffAction } from "@/lib/platform/access";
 
@@ -294,12 +296,18 @@ export async function approveApplication(
 /**
  * Approve a carrier-kind application into a `carriers` row.
  *
- * Deliberately does much less than the partner path. No account is created, no
- * email is sent, and no credential is issued, because none of those is what
- * happens next with a carrier: what happens next is a contract, then filings,
- * then somebody writes an adapter. The row is a `prospect` until all three are
- * true, and `setCarrierStatus` refuses to make it active before there is code
- * that can talk to it.
+ * Deliberately does much less than the partner path. No account is created and
+ * no credential is issued, because neither is what happens next with a carrier:
+ * what happens next is a contract, then filings, then somebody writes an adapter.
+ * The row is a `prospect` until all three are true, and `setCarrierStatus`
+ * refuses to make it active before there is code that can talk to it.
+ *
+ * It does now send an email, which it did not originally. "No account, therefore
+ * no message" was a mistake of reasoning: it treated having somewhere to sign in
+ * as the only reason to write to somebody. The effect was that a carrier applied,
+ * we approved them, and they were never told — which from their side is
+ * indistinguishable from being ignored. The message carries an onboarding link
+ * instead of a login, because the link is what a carrier can actually use.
  */
 export async function approveCarrierApplication(
   staff: Staff,
@@ -331,6 +339,7 @@ export async function approveCarrierApplication(
     contactName: application.contact_name,
     contactEmail: application.contact_email,
     notes: options.note ?? application.notes,
+    approvedAt: new Date(),
   });
 
   // `approved_as_carrier` is its own status rather than `approved`, for two
@@ -361,6 +370,32 @@ export async function approveCarrierApplication(
     subjectId: applicationId,
     detail: { carrier_id: carrier.id, slug: carrier.slug, company: application.company_name },
   });
+
+  // Last, and outside anything that could undo the approval. Minting the link
+  // touches the database, so a failure here is possible; an approval that rolled
+  // back because an invitation could not be created would be the worst of the
+  // available outcomes. Staff can re-send the link from the carrier page, and the
+  // console shows when there has never been one.
+  try {
+    const { url, expiresAt } = await createOnboardingLink(db, {
+      carrierId: carrier.id,
+      sentTo: application.contact_email,
+      createdBy: staff.userId,
+    });
+
+    await carrierApproved({
+      to: application.contact_email,
+      contactName: application.contact_name,
+      companyName: application.company_name,
+      onboardingUrl: url,
+      expiresAt,
+    });
+  } catch (error) {
+    console.error(
+      `carrier ${carrier.id} approved but the onboarding invitation failed:`,
+      (error as Error).message,
+    );
+  }
 
   return { carrierId: carrier.id, slug: carrier.slug };
 }

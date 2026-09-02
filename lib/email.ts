@@ -1,5 +1,6 @@
 import "server-only";
 
+import { BRAND } from "@/lib/brand";
 import { emailFrom, resendApiKey, supportEmail } from "@/lib/env";
 
 /**
@@ -27,6 +28,11 @@ export async function sendEmail(message: {
   subject: string;
   text: string;
   attachments?: EmailAttachment[];
+  /**
+   * Where a reply should land, when support is the wrong desk. Defaults to
+   * support because most mail this product sends is about an account.
+   */
+  replyTo?: string;
 }): Promise<SendResult> {
   const key = resendApiKey();
 
@@ -62,7 +68,7 @@ export async function sendEmail(message: {
       // shaped exactly like a phishing attempt; a Reply-To that resolves is one
       // of the few signals separating the two. Not decisive on its own —
       // reputation is earned by volume over time — but free and true.
-      reply_to: supportEmail(),
+      reply_to: message.replyTo ?? supportEmail(),
       subject: message.subject,
       // Plain text only, deliberately. A signing link that arrives looking like a
       // marketing email is a signing link that lands in spam.
@@ -81,6 +87,46 @@ export async function sendEmail(message: {
 
   const body = (await response.json()) as { id?: string };
   return { id: body.id ?? "unknown", transport: "resend" };
+}
+
+/**
+ * A notification, sent on a best-effort basis.
+ *
+ * The distinction from `sendEmail` is what a failure means. A signing link that
+ * does not send is the feature failing, so that path lets the error surface and
+ * records what happened. A notification is a courtesy attached to a decision
+ * somebody already made: a carrier we approved is approved whether or not Resend
+ * was reachable, and rolling back an approval because an email bounced would be
+ * the tail wagging the dog. So this logs and swallows.
+ *
+ * Every caller composes plain text lines and gets the sign-off appended, which is
+ * the only reason this is shared rather than repeated per module.
+ */
+export async function sendNotice(message: {
+  to: string;
+  subject: string;
+  lines: string[];
+  /**
+   * Who it is from, when the product as a whole is the wrong answer. A carrier
+   * mid-onboarding is dealing with a named team, and signing that mail with the
+   * product name tells them less than nothing about who to chase.
+   */
+  signature?: string;
+  replyTo?: string;
+}): Promise<void> {
+  try {
+    await sendEmail({
+      to: message.to,
+      subject: message.subject,
+      text: [...message.lines, "", `— ${message.signature ?? BRAND.name}`].join("\n"),
+      replyTo: message.replyTo,
+    });
+  } catch (error) {
+    console.error(
+      `notice "${message.subject}" to ${message.to} failed:`,
+      (error as Error).message,
+    );
+  }
 }
 
 /** The email that carries a signing link. */
