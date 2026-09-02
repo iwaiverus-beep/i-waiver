@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Container } from "@/components/ui";
-import { PageHeading } from "@/components/PageHeading";
+import { PageIntro } from "@/components/PageIntro";
 import { Empty, Note, Panel } from "@/components/app-ui";
 import { AdminNav } from "@/components/AdminNav";
 import { NewCarrierForm } from "@/components/CarrierTools";
@@ -39,10 +39,10 @@ export default async function CarriersPage() {
     <Container className="py-14 sm:py-20">
       <AdminNav role={staff.role} email={staff.email} />
 
-      <PageHeading title="Carriers">
+      <PageIntro title="Carriers" defaultOpen>
         Insurers and MGAs whose paper we write on. Not partners — we hold their
         credential and call them, not the reverse.
-      </PageHeading>
+      </PageIntro>
 
       <div className="mt-10 space-y-8">
         <Panel title="Everyone" description="Only an active carrier is offered when quoting.">

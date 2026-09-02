@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { Container, PAGE_PADDING } from "@/components/ui";
 import { AppNav } from "@/components/AppNav";
 import { AgreementsList } from "@/components/AgreementsList";
-import { PageHeading } from "@/components/PageHeading";
+import { PageIntro } from "@/components/PageIntro";
 import { Note } from "@/components/app-ui";
 import { userClient } from "@/lib/supabase/server";
 import { requireActor } from "@/lib/agreements/access";
@@ -90,11 +90,11 @@ export default async function DashboardPage({
       {/* Deliberately does not explain drafts or archiving. Both already have
           their own note further down, shown only to a reader who has one — saying
           it twice on the same screen teaches nobody anything the second time. */}
-      <PageHeading title="Your agreements">
+      <PageIntro title="Your agreements" defaultOpen>
         Everything you have lent, are lending, or have asked somebody to sign for,
         newest first. Search or filter to narrow it down; a finished agreement
         stays on the list until you file it away.
-      </PageHeading>
+      </PageIntro>
 
       {/* Somebody has scanned a code and is, quite possibly, standing there.
           Deliberately a card and not a redirect: auto-opening the form on arrival

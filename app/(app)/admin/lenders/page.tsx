@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Container } from "@/components/ui";
-import { PageHeading } from "@/components/PageHeading";
+import { PageIntro } from "@/components/PageIntro";
 import { Panel, Stat } from "@/components/app-ui";
 import { AdminNav } from "@/components/AdminNav";
 import { LenderTable } from "@/components/LenderTable";
@@ -41,11 +41,11 @@ export default async function LendersPage() {
     <Container className="py-14 sm:py-20">
       <AdminNav role={staff.role} email={staff.email} />
 
-      <PageHeading title="Lenders">
+      <PageIntro title="Lenders" defaultOpen>
         Everyone who creates agreements — a person or a business, and (once a
         platform is integrated) their customers too. One row each, however many
         accounts they hold.
-      </PageHeading>
+      </PageIntro>
 
       <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Stat label="Lenders" value={stats.lenders} />

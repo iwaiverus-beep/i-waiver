@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Container } from "@/components/ui";
-import { PageHeading } from "@/components/PageHeading";
+import { PageIntro } from "@/components/PageIntro";
 import { Note, Panel, Stat } from "@/components/app-ui";
 import { AdminNav } from "@/components/AdminNav";
 import { BorrowerTable } from "@/components/BorrowerTable";
@@ -41,10 +41,10 @@ export default async function BorrowersPage() {
     <Container className="py-14 sm:py-20">
       <AdminNav role={staff.role} email={staff.email} />
 
-      <PageHeading title="Borrowers">
+      <PageIntro title="Borrowers" defaultOpen>
         Everyone who has been asked to sign. Counted by email address, because a
         borrower signs from a link and mostly never holds an account.
-      </PageHeading>
+      </PageIntro>
 
       <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Stat label="Borrowers" value={rows.length} />

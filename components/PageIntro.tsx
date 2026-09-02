@@ -13,19 +13,30 @@ import { useId, useState } from "react";
  * Not a native <details>, because the marker belongs on the right of the
  * heading rather than in front of it, and the whole heading has to stay an <h1>
  * for anything reading the page in outline form.
+ *
+ * `defaultOpen` exists because the two halves of the product want opposite
+ * things. A lender's list screens are opened many times a day by somebody who
+ * has read the sentence already, so they start closed. The console and the
+ * partner screens are visited rarely, often once, and closing the explanation
+ * there hides it from the only reader who was ever going to need it.
  */
 export function PageIntro({
   title,
   children,
+  defaultOpen = false,
+  /** `mt-4` and friends, where a page needs the title to sit lower. */
+  className = "",
 }: {
   title: string;
   children: React.ReactNode;
+  defaultOpen?: boolean;
+  className?: string;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const bodyId = useId();
 
   return (
-    <div>
+    <div className={className}>
       <button
         type="button"
         onClick={() => setOpen(!open)}
@@ -60,7 +71,7 @@ export function PageIntro({
       </button>
 
       {open && (
-        <p id={bodyId} className="mt-4 max-w-prose text-ink-soft">
+        <p id={bodyId} className="mt-3 max-w-prose text-sm leading-relaxed text-ink-soft">
           {children}
         </p>
       )}

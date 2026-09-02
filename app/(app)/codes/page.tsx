@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Container, PAGE_PADDING } from "@/components/ui";
-import { PageHeading } from "@/components/PageHeading";
+import { PageIntro } from "@/components/PageIntro";
 import { userClient } from "@/lib/supabase/server";
 import { requireActor } from "@/lib/agreements/access";
 import { CodesManager, type IntakeLinkRow } from "@/components/CodesManager";
@@ -72,11 +72,11 @@ export default async function CodesPage() {
         <Link href="/dashboard" className="text-sm text-ink-muted hover:text-ink">
           ← Back
         </Link>
-        <PageHeading title="Your codes" titleClassName="mt-4">
+        <PageIntro title="Your codes" defaultOpen className="mt-4">
           Print one and someone can start their side of an agreement by pointing a
           camera at it. Nothing is agreed by scanning — the request lands in your
           queue, and you decide.
-        </PageHeading>
+        </PageIntro>
 
         <CodesManager
           links={(linkRows ?? []) as IntakeLinkRow[]}

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Container } from "@/components/ui";
-import { PageHeading } from "@/components/PageHeading";
+import { PageIntro } from "@/components/PageIntro";
 import { Panel } from "@/components/app-ui";
 import { AdminNav } from "@/components/AdminNav";
 import {
@@ -63,7 +63,7 @@ export default async function ConfigPage() {
     <Container className="py-14 sm:py-20">
       <AdminNav role={staff.role} email={staff.email} />
 
-      <PageHeading title="Configuration">
+      <PageIntro title="Configuration" defaultOpen>
         {writableCount === 0 ? (
           <>
             No combination of state and activity can currently produce a document.
@@ -77,7 +77,7 @@ export default async function ConfigPage() {
             says which piece is missing everywhere else.
           </>
         )}
-      </PageHeading>
+      </PageIntro>
 
       <div className="mt-10 space-y-8">
         <Panel
