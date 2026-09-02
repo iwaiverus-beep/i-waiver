@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Container } from "@/components/ui";
+import { Container, PAGE_PADDING } from "@/components/ui";
 import { Note } from "@/components/app-ui";
 import { GroupBoard } from "@/components/GroupBoard";
 import { NotAuthorised, requireActor } from "@/lib/agreements/access";
@@ -39,7 +39,7 @@ export default async function GroupPage({
   const rental = board.members.find((m) => m.role === "rental");
 
   return (
-    <Container className="py-14 sm:py-20">
+    <Container className={PAGE_PADDING}>
       <Link href="/dashboard" className="text-sm text-ink-muted hover:text-ink">
         ← All agreements
       </Link>

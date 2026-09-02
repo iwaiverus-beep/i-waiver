@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Container } from "@/components/ui";
+import { Container, PAGE_PADDING } from "@/components/ui";
 import { userClient } from "@/lib/supabase/server";
 import { requireActor } from "@/lib/agreements/access";
 import { CodesManager, type IntakeLinkRow } from "@/components/CodesManager";
@@ -66,7 +66,7 @@ export default async function CodesPage() {
     : { data: [] };
 
   return (
-    <Container className="py-14 sm:py-20">
+    <Container className={PAGE_PADDING}>
       <div className="mx-auto max-w-2xl">
         <Link href="/dashboard" className="text-sm text-ink-muted hover:text-ink">
           ← Back

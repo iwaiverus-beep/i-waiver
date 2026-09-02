@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { Container } from "@/components/ui";
+import { Container, PAGE_PADDING } from "@/components/ui";
 import { AppNav } from "@/components/AppNav";
 import { Empty } from "@/components/app-ui";
 import { PageIntro } from "@/components/PageIntro";
@@ -68,7 +68,7 @@ export default async function AssetsPage({
   const orgOriginatorIds = (originators ?? []).map((row) => row.id as string);
 
   return (
-    <Container className="pb-14 pt-0 sm:py-20">
+    <Container className={PAGE_PADDING}>
       <AppNav />
       <PageIntro title="Things you lend">
         Save what you lend once and pick it from a list each time. Details are

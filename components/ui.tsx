@@ -1,6 +1,22 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+/**
+ * The top and bottom of a signed-in page, said once.
+ *
+ * Every screen behind the sign-in used to carry its own copy of this, and they
+ * drifted: some opened 56px below the header, one of them 80px, and after the
+ * phone's nav moved into the corner a few sat flush against it. On a small
+ * screen that gap is the first thing anybody sees, and four screens disagreeing
+ * about it reads as four different products.
+ *
+ * `pt-4` is deliberately small. The header is sticky and already draws a line
+ * under itself, so the title needs separating from it, not launching off it —
+ * and a phone has no room to spend on empty paper above the fold. From `sm`,
+ * where there is room and the nav row is back, it opens up to the old 80px.
+ */
+export const PAGE_PADDING = "pb-14 pt-4 sm:py-20";
+
 export function Container({
   children,
   className = "",

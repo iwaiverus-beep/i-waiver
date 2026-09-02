@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Container } from "@/components/ui";
+import { Container, PAGE_PADDING } from "@/components/ui";
 import { Empty, Mono, Note, Panel, Row, StatusBadge } from "@/components/app-ui";
 import { AgreementActions } from "@/components/AgreementActions";
 import { BookingPanel } from "@/components/BookingPanel";
@@ -118,7 +118,7 @@ export default async function AgreementPage({
     .map((e) => e.payload as Record<string, unknown>);
 
   return (
-    <Container className="py-14 sm:py-20">
+    <Container className={PAGE_PADDING}>
       <Link href="/dashboard" className="text-sm text-ink-muted hover:text-ink">
         ← All agreements
       </Link>

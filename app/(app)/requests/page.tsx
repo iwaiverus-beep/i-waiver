@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Container } from "@/components/ui";
+import { Container, PAGE_PADDING } from "@/components/ui";
 import { Note } from "@/components/app-ui";
 import { requireActor } from "@/lib/agreements/access";
 import { addOnsForRequests, pendingRequests } from "@/lib/intake/requests";
@@ -49,7 +49,7 @@ export default async function RequestsPage() {
   if (waiting.length === 1) redirect(`/agreements/new?request=${waiting[0].id}`);
 
   return (
-    <Container className="py-14 sm:py-20">
+    <Container className={PAGE_PADDING}>
       <div className="mx-auto max-w-2xl">
         <Link href="/dashboard" className="text-sm text-ink-muted hover:text-ink">
           ← Back

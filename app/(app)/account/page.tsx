@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
-import { Container } from "@/components/ui";
+import { Container, PAGE_PADDING } from "@/components/ui";
 import { AppNav } from "@/components/AppNav";
 import { PasskeyManager } from "@/components/PasskeyManager";
 import { ProfileForm } from "@/components/ProfileForm";
@@ -28,7 +28,7 @@ export default async function AccountPage() {
   if (!profile) redirect("/login?next=/account");
 
   return (
-    <Container className="py-14 sm:py-20">
+    <Container className={PAGE_PADDING}>
       <AppNav />
 
       <h1 className="font-serif text-3xl tracking-tight sm:text-4xl">Your account</h1>

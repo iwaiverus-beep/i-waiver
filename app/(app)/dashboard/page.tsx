@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Container } from "@/components/ui";
+import { Container, PAGE_PADDING } from "@/components/ui";
 import { AppNav } from "@/components/AppNav";
 import { AgreementsList } from "@/components/AgreementsList";
 import { Note } from "@/components/app-ui";
@@ -82,7 +82,7 @@ export default async function DashboardPage({
   const sweepCount = await countFinishedBefore(actor, sweepBefore);
 
   return (
-    <Container className="pb-14 pt-0 sm:py-20">
+    <Container className={PAGE_PADDING}>
       <AppNav />
       {/* No action button here: "Lend something" leads AppNav, so it sits in the
           same place on every lender screen rather than moving around. */}
