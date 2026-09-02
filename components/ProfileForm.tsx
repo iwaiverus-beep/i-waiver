@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { initialsFor } from "@/lib/format";
+import { initialsFor, US_TIME_ZONES } from "@/lib/format";
 import { US_STATES } from "@/lib/jurisdictions";
 import { send } from "@/lib/client/request";
 import { PROFILE_UPDATED_EVENT } from "./AccountMenu";
@@ -21,6 +21,7 @@ export type ProfileValues = {
   full_name: string | null;
   phone: string | null;
   home_state: string | null;
+  time_zone: string | null;
   avatar_url: string | null;
   email: string | null;
 };
@@ -31,6 +32,7 @@ export function ProfileForm({ initial }: { initial: ProfileValues }) {
   const [fullName, setFullName] = useState(initial.full_name ?? "");
   const [phone, setPhone] = useState(initial.phone ?? "");
   const [homeState, setHomeState] = useState(initial.home_state ?? "");
+  const [timeZone, setTimeZone] = useState(initial.time_zone ?? "");
   const [avatarUrl, setAvatarUrl] = useState(initial.avatar_url);
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -55,6 +57,7 @@ export function ProfileForm({ initial }: { initial: ProfileValues }) {
         full_name: fullName,
         phone: phone || null,
         home_state: homeState || null,
+        time_zone: timeZone || null,
       },
     });
 
@@ -216,6 +219,26 @@ export function ProfileForm({ initial }: { initial: ProfileValues }) {
           <p className="mt-1.5 text-xs text-ink-muted">
             Only a starting point on the lend form. What governs an agreement is the
             state the activity happens in, which you pick each time.
+          </p>
+        </Field>
+
+        <Field label="Your time zone">
+          <select
+            value={timeZone}
+            onChange={(e) => setTimeZone(e.target.value)}
+            className={inputClass}
+          >
+            <option value="">Follow this device</option>
+            {US_TIME_ZONES.map((zone) => (
+              <option key={zone.value} value={zone.value}>
+                {zone.label}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1.5 text-xs leading-relaxed text-ink-muted">
+            Which clock is yours, so we can tell you how far a loan&rsquo;s hours sit
+            from it. It never changes what an agreement says: those times belong to
+            the state the activity happens in, wherever you are when you write it.
           </p>
         </Field>
 

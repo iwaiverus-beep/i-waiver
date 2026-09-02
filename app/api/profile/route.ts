@@ -5,6 +5,7 @@ import { TransitionRefused } from "@/lib/agreements/lifecycle";
 import { cleanPhone } from "@/lib/agreements/contact";
 import { jsonError, readJson, text } from "@/lib/http";
 import { isStateCode } from "@/lib/jurisdictions";
+import { asIanaZone } from "@/lib/format";
 import { PROFILE_COLUMNS, avatarUrl, readProfile, type Profile } from "@/lib/profile";
 
 export const runtime = "nodejs";
@@ -56,6 +57,16 @@ export async function PATCH(request: Request) {
       throw new TransitionRefused(`${homeState} is not a state we recognise.`);
     }
 
+    // Validated against Intl, not against a list of our own: the tz database is
+    // revised several times a year, and the runtime's copy is the one that has to
+    // be able to format with this name later. An unknown zone accepted here would
+    // be a value that throws inside a date formatter months from now.
+    const rawZone = text(body.time_zone, 64);
+    const timeZone = rawZone ? asIanaZone(rawZone) : null;
+    if (rawZone && !timeZone) {
+      throw new TransitionRefused(`${rawZone} is not a time zone we recognise.`);
+    }
+
     const phone = cleanPhone(text(body.phone, 40));
 
     const db = serviceClient();
@@ -70,6 +81,7 @@ export async function PATCH(request: Request) {
       full_name: fullName,
       phone,
       home_state: homeState,
+      time_zone: timeZone,
     };
 
     // A number that changed is a number nobody has confirmed. Leaving the old

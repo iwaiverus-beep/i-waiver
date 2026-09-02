@@ -183,6 +183,57 @@ export function asIanaZone(value: string | null | undefined): string | null {
   }
 }
 
+/**
+ * The zones a US lender can say they are sitting in.
+ *
+ * Deliberately short. This is not a world clock — it is the answer to "which
+ * clock is yours", asked of somebody arranging a jet ski loan, and a list of six
+ * hundred IANA names would make a one-second decision into a search problem. The
+ * six that cover every US state, named the way people say them rather than the
+ * way the tz database spells them.
+ *
+ * Anything outside it is still storable: the column takes any well-formed IANA
+ * name, so widening this list later is a UI change and not a migration.
+ */
+export const US_TIME_ZONES: { value: string; label: string }[] = [
+  { value: "America/New_York", label: "Eastern" },
+  { value: "America/Chicago", label: "Central" },
+  { value: "America/Denver", label: "Mountain" },
+  { value: "America/Phoenix", label: "Arizona (no daylight saving)" },
+  { value: "America/Los_Angeles", label: "Pacific" },
+  { value: "America/Anchorage", label: "Alaska" },
+  { value: "Pacific/Honolulu", label: "Hawaii (no daylight saving)" },
+];
+
+/**
+ * How far the agreement's clock is from the reader's own, in hours.
+ *
+ * Positive means the activity's state is ahead. A lender in Kansas City arranging
+ * a Florida loan is told "8:15 PM" for a window that starts, by their own watch,
+ * at 7:15 — which is correct and looks like a bug unless somebody says out loud
+ * that the two clocks differ.
+ *
+ * `readerZone` is what they set on their profile. Null falls back to the browser,
+ * which is right most of the time and wrong in the cases that matter most: a
+ * laptop still set to the last trip is exactly the machine whose owner most needs
+ * this sentence to be true.
+ *
+ * BROWSER ONLY when `readerZone` is null. `getTimezoneOffset` on the server is
+ * the deploy's clock — UTC on Vercel — so calling this during a server render
+ * produces a number true of nobody and then mismatches on hydration. Call it from
+ * an effect.
+ */
+export function zoneDifferenceHours(
+  timeZone: string,
+  readerZone?: string | null,
+  instant = new Date(),
+): number {
+  const readersOffset = readerZone
+    ? zoneOffsetMs(instant, readerZone)
+    : -instant.getTimezoneOffset() * 60_000;
+  return (zoneOffsetMs(instant, timeZone) - readersOffset) / 3_600_000;
+}
+
 /** "EDT", "CST" — for labelling a field with the clock it is asking for. */
 export function zoneAbbreviation(timeZone: string, instant = new Date()): string {
   const parts = new Intl.DateTimeFormat("en-US", {

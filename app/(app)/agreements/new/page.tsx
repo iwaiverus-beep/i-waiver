@@ -13,6 +13,7 @@ import { userClient } from "@/lib/supabase/server";
 import { ASSET_COLUMNS_WITH_PHOTOS } from "@/lib/assets/fields";
 import { requireActor } from "@/lib/agreements/access";
 import { requestAddOns, requestForActor } from "@/lib/intake/requests";
+import { readTimeZone } from "@/lib/profile";
 
 export const metadata: Metadata = { title: "Lend something" };
 export const dynamic = "force-dynamic";
@@ -88,6 +89,10 @@ export default async function NewAgreementPage({
       .order("display_name"),
   ]);
 
+  // The lender's own clock, so the form can say how far a Florida window sits
+  // from it. Presentation only — it never touches what the document says.
+  const readerZone = await readTimeZone();
+
   const assets = (assetRows ?? []) as Asset[];
   const contacts = (contactRows ?? []) as Contact[];
 
@@ -114,6 +119,7 @@ export default async function NewAgreementPage({
               assets={assets}
               contacts={contacts}
               prefill={prefill}
+              readerZone={readerZone}
             />
           </div>
         )}

@@ -8,6 +8,7 @@ import {
   utcToZonedInput,
   zonedInputToUtc,
   zoneAbbreviation,
+  zoneDifferenceHours,
 } from "@/lib/format";
 import { DeviceContactPicker } from "./DeviceContactPicker";
 import type { Asset } from "./AssetsManager";
@@ -52,11 +53,20 @@ export function NewAgreementForm({
   assets = [],
   contacts = [],
   prefill,
+  readerZone,
 }: {
   states: OpenState[];
   assets?: Asset[];
   contacts?: Contact[];
   prefill?: RequestPrefill;
+  /**
+   * The lender's own clock, from their profile. Null follows the browser.
+   *
+   * Only ever used to say how far this window sits from theirs. It has no bearing
+   * on what the document says — that is `timeZone` below, which comes from the
+   * state the activity happens in.
+   */
+  readerZone?: string | null;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -77,6 +87,16 @@ export function NewAgreementForm({
   // and switching FL to TX makes that 9am Central, not 8am Central.
   const [window, setWindow] = useState({ starts: "", ends: "" });
 
+  // How far the loan's clock is from the reader's own. Null until mounted, and
+  // it has to be: the server has no idea what time it is where anyone is sitting,
+  // so computing this during the render would print a number true of nobody and
+  // then contradict itself on hydration. Re-run per state, because switching
+  // Florida to Texas changes the answer.
+  const [clockShift, setClockShift] = useState<number | null>(null);
+  useEffect(() => {
+    setClockShift(zoneDifferenceHours(timeZone, readerZone));
+  }, [timeZone, readerZone]);
+
   // Seeded on mount rather than at render. This component is server-rendered
   // first, where `new Date()` is the deploy's clock — UTC on Vercel — and an
   // uncontrolled defaultValue computed there survives hydration. That is the
@@ -86,13 +106,21 @@ export function NewAgreementForm({
     // The borrower's dates when they gave them, ours when they did not. They chose
     // a window on their own phone; overwriting it with a default would quietly
     // discard the one piece of the request only they could supply.
+    //
+    // NOW, not an hour from now. The default used to start at now + 1h, which is
+    // a fine guess and an unreadable one: a lender in Central arranging a Florida
+    // loan saw 9:15 PM against a watch reading 7:15 and had no way to tell which
+    // part of that gap was the time zone and which part was us being helpful.
+    // Seeded at the current moment, the number is checkable — it is what the
+    // clock says where the jet ski is — and the only difference left to explain
+    // is the real one, which the field now explains.
     setWindow({
       starts: utcToZonedInput(
-        prefill?.startsAt ? new Date(prefill.startsAt) : new Date(now + 60 * 60 * 1000),
+        prefill?.startsAt ? new Date(prefill.startsAt) : new Date(now),
         timeZone,
       ),
       ends: utcToZonedInput(
-        prefill?.endsAt ? new Date(prefill.endsAt) : new Date(now + 9 * 60 * 60 * 1000),
+        prefill?.endsAt ? new Date(prefill.endsAt) : new Date(now + 8 * 60 * 60 * 1000),
         timeZone,
       ),
     });
@@ -499,6 +527,22 @@ export function NewAgreementForm({
               }
               className={input}
             />
+            {/*
+              Said out loud, because the alternative is arithmetic done wrong.
+              These fields are the clock in the state the activity happens in —
+              that is the whole point, and it is on the document — but somebody
+              two zones away reads a number that does not match their own watch
+              and reasonably concludes the form is broken. The label already
+              carries the abbreviation; an abbreviation is not an instruction.
+            */}
+            {clockShift !== null && clockShift !== 0 && zoneLabel && (
+              <p className="mt-1.5 text-xs leading-relaxed text-ink-muted">
+                {zoneLabel} is {describeShift(clockShift)}{" "}
+                {readerZone ? zoneAbbreviation(readerZone) : "your own clock"}. The
+                window belongs to where the activity happens, so this is the time
+                the document will say.
+              </p>
+            )}
           </Field>
 
           <Field label={zoneLabel ? `Until (${zoneLabel})` : "Until"}>
@@ -567,6 +611,25 @@ export function NewAgreementForm({
 
 const input =
   "w-full rounded-lg border border-line bg-paper px-4 py-2.5 text-sm text-ink outline-none transition-colors focus:border-accent";
+
+/**
+ * "an hour ahead of", "two hours behind" — the gap between two clocks, in words.
+ *
+ * Words rather than a signed number, because "-1" tells a reader nothing about
+ * which way to count. Spelled out to two, which covers every pair of US zones a
+ * lender and an activity can land in bar Alaska and Hawaii; past that the digit
+ * is clearer than the word anyway. Half hours are formatted rather than rounded:
+ * no state needs them today, and a zone that does should not silently lie.
+ */
+const SPELLED = ["", "an", "two"];
+
+function describeShift(hours: number): string {
+  const size = Math.abs(hours);
+  const count =
+    Number.isInteger(size) && size <= 2 ? SPELLED[size] : String(size);
+  const unit = size === 1 ? "hour" : "hours";
+  return `${count} ${unit} ${hours > 0 ? "ahead of" : "behind"}`;
+}
 
 function Legend({ title, hint }: { title: string; hint: string }) {
   return (

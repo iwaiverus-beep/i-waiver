@@ -27,6 +27,8 @@ export type Profile = {
   phone: string | null;
   phone_verified_at: string | null;
   home_state: string | null;
+  /** IANA name, or null to follow the browser. Presentation only — see 20260901000037. */
+  time_zone: string | null;
   avatar_path: string | null;
 };
 
@@ -37,7 +39,7 @@ export type ProfileView = Profile & {
 };
 
 export const PROFILE_COLUMNS =
-  "full_name, phone, phone_verified_at, home_state, avatar_path";
+  "full_name, phone, phone_verified_at, home_state, time_zone, avatar_path";
 
 /**
  * A URL the browser can put in an `<img>`.
@@ -76,6 +78,7 @@ export async function readProfile(): Promise<ProfileView | null> {
     phone: null,
     phone_verified_at: null,
     home_state: null,
+    time_zone: null,
     avatar_path: null,
   }) as Profile;
 
@@ -84,4 +87,25 @@ export async function readProfile(): Promise<ProfileView | null> {
     email: user.email ?? null,
     avatar_url: await avatarUrl(db, profile.avatar_path),
   };
+}
+
+/**
+ * Just the account holder's own clock, for screens that need to compare a time
+ * against it.
+ *
+ * Its own read rather than `readProfile`, which mints a signed avatar URL on the
+ * way past — a storage round trip to answer a question about time zones.
+ */
+export async function readTimeZone(): Promise<string | null> {
+  const user = await currentUser();
+  if (!user) return null;
+
+  const db = serviceClient();
+  const { data } = await db
+    .from("profiles")
+    .select("time_zone")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  return (data?.time_zone as string | null) ?? null;
 }

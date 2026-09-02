@@ -45,6 +45,7 @@ export default async function AccountPage() {
               full_name: profile.full_name,
               phone: profile.phone,
               home_state: profile.home_state,
+              time_zone: profile.time_zone,
               avatar_url: profile.avatar_url,
               email: profile.email,
             }}
