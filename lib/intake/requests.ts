@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { NotAuthorised } from "@/lib/agreements/access";
 import { TransitionRefused } from "@/lib/agreements/lifecycle";
 import { resolveIntakeLink } from "@/lib/intake/links";
+import { SMS_CONSENT_TEXT } from "@/lib/messaging/consent";
 
 /**
  * The queue a scan feeds.
@@ -21,6 +22,8 @@ export type AgreementRequest = {
   borrower_name: string;
   borrower_email: string | null;
   borrower_phone: string | null;
+  sms_consent_at: string | null;
+  sms_consent_text: string | null;
   starts_at: string | null;
   ends_at: string | null;
   note: string | null;
@@ -55,6 +58,8 @@ export async function submitRequest(
     borrowerName: string;
     borrowerEmail: string | null;
     borrowerPhone: string | null;
+    /** They ticked the box beside the number. Nobody else can tick it for them. */
+    smsConsent: boolean;
     startsAt: string | null;
     endsAt: string | null;
     note: string | null;
@@ -103,6 +108,17 @@ export async function submitRequest(
       borrower_name: input.borrowerName,
       borrower_email: input.borrowerEmail,
       borrower_phone: input.borrowerPhone,
+
+      // Recorded only when there is a number to text, which the check constraint
+      // also insists on. A tick with no number is not consent to anything, and a
+      // row asserting otherwise would be a false record rather than a harmless
+      // one. The wording is frozen from our own constant at the moment of the
+      // insert — see lib/messaging/consent.ts for why it is stored at all.
+      sms_consent_at:
+        input.smsConsent && input.borrowerPhone ? new Date().toISOString() : null,
+      sms_consent_text:
+        input.smsConsent && input.borrowerPhone ? SMS_CONSENT_TEXT : null,
+
       starts_at: input.startsAt,
       ends_at: input.endsAt,
       note: input.note,

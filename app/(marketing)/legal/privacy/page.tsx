@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Container, DraftNotice, Eyebrow, H1 } from "@/components/ui";
 import { BRAND } from "@/lib/brand";
 
@@ -64,6 +65,26 @@ export default function PrivacyPage() {
               identity, and store documents. Where cover is placed, the
               information a carrier requires to quote and issue a policy, under
               a written data-sharing agreement.
+            </Clause>
+
+            {/* Stated here as well as on /legal/messaging because a carrier
+                reviewing a messaging registration reads the privacy policy
+                looking for this exact assurance, and takes its absence as the
+                answer. The two pages must not drift apart. */}
+            <Clause heading="Text messages">
+              Where you give us a mobile number and agree to be texted about
+              your agreement, that number and that agreement are used to reach
+              you about it and nothing else. They are never sold, and never
+              shared with anyone else for their own marketing. They go only to
+              the provider that delivers the message for us. What we send and
+              how to stop it is set out on the{" "}
+              <Link
+                href="/legal/messaging"
+                className="underline decoration-line underline-offset-4 hover:decoration-ink"
+              >
+                text messages page
+              </Link>
+              .
             </Clause>
 
             <Clause heading="Your rights">

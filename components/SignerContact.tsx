@@ -144,7 +144,15 @@ export function SignerContact({
 
             {/* Collected now, used when the SMS channel is built. Storing it is
                 what makes that a delivery change rather than a data-gathering
-                exercise across every agreement already out. */}
+                exercise across every agreement already out.
+
+                A number typed HERE is not permission to text it. The lender is
+                filling this in on somebody else's behalf, and one person cannot
+                consent for another — so this field records a way to reach them,
+                and the borrower's own agreement to be texted is captured where
+                they type it themselves, in StartRequestForm. The sentence below
+                says so rather than leaving a lender to assume a number they
+                entered is a number we will use. */}
             <label className="block">
               <span className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
                 Phone (optional)
@@ -157,6 +165,10 @@ export function SignerContact({
                 autoComplete="off"
                 className="mt-1 w-full rounded-lg border border-line bg-paper px-3 py-2 text-sm text-ink"
               />
+              <span className="mt-1 block text-xs text-ink-muted">
+                Kept so you can reach them. We do not text a number you enter
+                for someone else — they have to agree to that themselves.
+              </span>
             </label>
 
             <p className="text-xs text-ink-muted">

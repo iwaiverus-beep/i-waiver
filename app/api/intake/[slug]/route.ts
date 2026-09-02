@@ -25,6 +25,13 @@ type Body = {
   borrower_name?: unknown;
   borrower_email?: unknown;
   borrower_phone?: unknown;
+  /**
+   * Whether they ticked the box beside the number. A boolean and nothing more:
+   * the wording that goes on the row comes from our own constant, never from
+   * the body, so a hand-rolled request cannot file a consent record claiming
+   * they agreed to something we never showed anybody.
+   */
+  sms_consent?: unknown;
   starts_at?: unknown;
   ends_at?: unknown;
   note?: unknown;
@@ -67,6 +74,7 @@ export async function POST(
       borrowerName,
       borrowerEmail,
       borrowerPhone: text(body.borrower_phone, 30),
+      smsConsent: body.sms_consent === true,
       startsAt: text(body.starts_at, 40),
       endsAt: text(body.ends_at, 40),
       note: text(body.note, 500),

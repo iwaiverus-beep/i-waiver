@@ -25,6 +25,7 @@ export function AppFooter() {
           <div className="flex items-center gap-6">
             <FooterLink href="/legal/privacy">Privacy</FooterLink>
             <FooterLink href="/legal/terms">Terms</FooterLink>
+            <FooterLink href="/legal/messaging">Text messages</FooterLink>
           </div>
         </div>
 

@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { formatRate, orderedPhotos, photoUrl } from "@/lib/assets/fields";
 import { formatCents } from "@/lib/format";
 import { itemTitle, type ListingItem } from "@/components/ItemListing";
+import { SMS_CONSENT_TEXT } from "@/lib/messaging/consent";
 
 /**
  * The borrower's side, filled in on their own phone.
@@ -47,6 +48,13 @@ export function StartRequestForm({
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+
+  // Controlled only because the consent box has to react to them: it appears
+  // when there is a number, and the line about what happens without it depends
+  // on whether there is an email to fall back to.
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [smsConsent, setSmsConsent] = useState(false);
 
   // Ticked to start with only where the lender said so — the thing that genuinely
   // goes with it every time, like the trailer with the boat. Never as a way to
@@ -97,6 +105,10 @@ export function StartRequestForm({
           borrower_name: form.get("borrower_name"),
           borrower_email: form.get("borrower_email"),
           borrower_phone: form.get("borrower_phone"),
+          // The tick, and the sentence it was against. Sent together because the
+          // server stores both, and stores the wording from the same constant
+          // this form rendered rather than trusting the value in the body.
+          sms_consent: smsConsent,
           // Sent as instants, not as the raw "2026-09-01T09:41" the input holds.
           // That string carries no zone, so Postgres reads it as UTC and a
           // borrower asking for 9am gets a request for 5am. Read here in the
@@ -213,18 +225,90 @@ export function StartRequestForm({
           <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink-muted">
             Email
           </span>
-          <input name="borrower_email" type="email" maxLength={200} className={input} />
+          <input
+            name="borrower_email"
+            type="email"
+            maxLength={200}
+            className={input}
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+          />
         </label>
         <label className="block">
           <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink-muted">
             Or phone
           </span>
-          <input name="borrower_phone" type="tel" maxLength={30} className={input} />
+          <input
+            name="borrower_phone"
+            type="tel"
+            maxLength={30}
+            className={input}
+            value={phone}
+            onChange={(event) => setPhone(event.target.value)}
+          />
         </label>
       </div>
       <p className="-mt-2 text-xs text-ink-muted">
         One of the two is enough. It is how the agreement reaches you.
       </p>
+
+      {/*
+        The opt-in, and the only one there is.
+
+        Beside the field rather than under the button, because consent to be
+        texted has to sit where the number is typed — that adjacency is what a
+        carrier reviewing the registration is looking for in the screenshot, and
+        it is also just honest. Unticked to start, always: a pre-ticked box is
+        not consent, and it is the single thing most likely to fail review.
+
+        It appears only once there is a number to consent about. An empty
+        checkbox for a field nobody filled is noise on a form that is trying to
+        ask for as little as possible, and ticking it would record permission to
+        text nothing.
+      */}
+      {phone.trim() !== "" && (
+        <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-line bg-surface/50 p-4">
+          <input
+            name="sms_consent"
+            type="checkbox"
+            checked={smsConsent}
+            onChange={(event) => setSmsConsent(event.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0 accent-ink"
+          />
+          <span className="text-xs leading-relaxed text-ink-soft">
+            {SMS_CONSENT_TEXT}{" "}
+            <a
+              href="/legal/messaging"
+              target="_blank"
+              rel="noreferrer"
+              className="underline decoration-line underline-offset-2 hover:decoration-ink"
+            >
+              Text messages
+            </a>{" "}
+            and{" "}
+            <a
+              href="/legal/privacy"
+              target="_blank"
+              rel="noreferrer"
+              className="underline decoration-line underline-offset-2 hover:decoration-ink"
+            >
+              Privacy
+            </a>
+            .
+          </span>
+        </label>
+      )}
+
+      {/* Leaving it unticked is a real answer, not a mistake to nag about, so
+          this says what will happen rather than asking again. It only appears
+          when there is no email to fall back to — otherwise there is no
+          consequence worth a sentence. */}
+      {phone.trim() !== "" && !smsConsent && email.trim() === "" && (
+        <p className="-mt-2 text-xs text-ink-muted">
+          Without this we will not text you. Add an email address above, or{" "}
+          {lender} will have to reach you another way.
+        </p>
+      )}
 
       <div className="grid gap-5 sm:grid-cols-2">
         <label className="block">

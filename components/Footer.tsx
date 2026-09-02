@@ -36,6 +36,10 @@ export function Footer() {
             links={[
               { href: "/legal/privacy", label: "Privacy" },
               { href: "/legal/terms", label: "Terms" },
+              // Linked from the footer of every public page on purpose: a
+              // messaging registration is reviewed by someone who looks for it
+              // there before they look for it anywhere else.
+              { href: "/legal/messaging", label: "Text messages" },
             ]}
           />
         </div>
