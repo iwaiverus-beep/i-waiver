@@ -169,7 +169,14 @@ export function PayoutHandles() {
             type="text"
             required
             value={raw}
-            onChange={(e) => setRaw(e.target.value)}
+            onChange={(e) => {
+              setRaw(e.target.value);
+              // "Saved." belongs to the handle that is now on the card above.
+              // Leaving it up while somebody types the next one attaches last
+              // time's outcome to this time's typing.
+              setNotice(null);
+              setError(null);
+            }}
             placeholder={PROVIDER_PLACEHOLDERS[provider]}
             className={inputClass}
           />
@@ -194,7 +201,23 @@ export function PayoutHandles() {
           </div>
         )}
 
-        {existing && (
+        {/*
+          Only once there is something typed to replace it with.
+
+          This is a warning about what the button is ABOUT to do, and with an
+          empty box the button does nothing — the input is `required`. Showing it
+          anyway meant it appeared the moment a first handle saved: the reload
+          put the new row in `handles`, `existing` went truthy, and a lender who
+          had just added their only Venmo account was told they already had one
+          on file, directly above "Saved. Venmo is on your account."
+
+          Nothing was wrong and nothing was overwritten. It read as a collision
+          because it sat where an error sits, at the end of an action, saying a
+          thing had happened rather than that a thing would. Tied to the field it
+          describes, it says the useful version instead: you are typing a new
+          handle, and here is the one it will stand in for.
+        */}
+        {existing && raw.trim().length > 0 && (
           <Notice tone="good">
             You already have {providerLabel(provider)} on file as{" "}
             {displayHandle(existing.provider, existing.handle)}. Saving replaces it.
