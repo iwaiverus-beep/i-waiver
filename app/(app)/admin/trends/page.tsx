@@ -4,7 +4,8 @@ import { notFound } from "next/navigation";
 import { Container } from "@/components/ui";
 import { Empty } from "@/components/app-ui";
 import { AdminNav } from "@/components/AdminNav";
-import { BarChart, LineChart, StatTile, compact, money } from "@/components/charts";
+import { BarChart, LineChart, StatTile } from "@/components/charts";
+import { compact, money } from "@/lib/format";
 import { currentStaff } from "@/lib/platform/access";
 import { staffCan } from "@/lib/platform/roles";
 import {
@@ -263,7 +264,7 @@ export default async function TrendsPage() {
             { key: "bound", label: "Bound", color: 0 },
             { key: "collected", label: "Collected", color: 1 },
           ]}
-          format={money}
+          format="money"
         />
       </div>
     </Container>

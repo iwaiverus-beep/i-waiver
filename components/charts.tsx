@@ -36,19 +36,33 @@ export type Series = {
   color?: number;
 };
 
-/** 1284 -> "1,284"; 12903 -> "12.9K". Money is handled by the caller. */
-export function compact(n: number): string {
-  if (Math.abs(n) >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (Math.abs(n) >= 10_000) return `${(n / 1_000).toFixed(1)}K`;
-  return n.toLocaleString("en-US");
-}
+/**
+ * `compact` and `money` are NOT defined here, and must not be.
+ *
+ * This module is `"use client"`, so everything it exports becomes a client
+ * reference. A server component can pass one of those to a client component as a
+ * prop, but the moment it CALLS one — to fill in a stat tile, say — React throws
+ * "Attempted to call compact() from the server". They live in lib/format.ts,
+ * which belongs to neither side, and are imported by both.
+ */
+import { compact, money } from "@/lib/format";
 
-export function money(cents: number): string {
-  const dollars = cents / 100;
-  if (Math.abs(dollars) >= 1_000_000) return `$${(dollars / 1_000_000).toFixed(1)}M`;
-  if (Math.abs(dollars) >= 10_000) return `$${(dollars / 1_000).toFixed(1)}K`;
-  return `$${dollars.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
-}
+/**
+ * How a chart writes its numbers — NAMED, never supplied.
+ *
+ * These are client components and the pages using them are server components, so
+ * a `format` prop taking a function cannot cross that boundary: React has no way
+ * to serialise a function, and the render dies at request time with "Application
+ * error: a server-side exception has occurred". `next build` does not catch it,
+ * because every admin page is `force-dynamic` and so is never rendered during the
+ * build — which is exactly how this shipped. A string is data, and data crosses.
+ */
+export type Format = "count" | "money";
+
+const FORMATTERS: Record<Format, (n: number) => string> = {
+  count: compact,
+  money,
+};
 
 /** Clean axis ticks — 0 / 500 / 1,000, never 0 / 437 / 874. */
 function niceMax(value: number): number {
@@ -135,15 +149,16 @@ export function LineChart({
   description,
   points,
   series,
-  format = compact,
+  format: formatName = "count",
 }: {
   title: string;
   description?: string;
   /** Dense: one entry per day, zeros included. A gap drawn as a line lies. */
   points: { label: string; values: Record<string, number> }[];
   series: Series[];
-  format?: (n: number) => string;
+  format?: Format;
 }) {
+  const format = FORMATTERS[formatName] ?? compact;
   const clipId = useId();
   const svgRef = useRef<SVGSVGElement>(null);
   const [hover, setHover] = useState<number | null>(null);
@@ -395,16 +410,17 @@ export function BarChart({
   title,
   description,
   rows,
-  format = compact,
+  format: formatName = "count",
   colorIndex = 0,
 }: {
   title: string;
   description?: string;
   rows: { label: string; value: number; note?: string }[];
-  format?: (n: number) => string;
+  format?: Format;
   /** One colour for every bar. Length already encodes size; hue must not repeat it. */
   colorIndex?: number;
 }) {
+  const format = FORMATTERS[formatName] ?? compact;
   const color = SERIES_COLORS[colorIndex % SERIES_COLORS.length];
   const max = Math.max(1, ...rows.map((r) => r.value));
 

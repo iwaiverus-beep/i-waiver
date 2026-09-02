@@ -3,10 +3,10 @@ import { notFound } from "next/navigation";
 import { Container } from "@/components/ui";
 import { Note, Panel, Stat } from "@/components/app-ui";
 import { AdminNav } from "@/components/AdminNav";
-import { ReportTable, type Column } from "@/components/ReportTable";
+import { BorrowerTable } from "@/components/BorrowerTable";
 import { currentStaff } from "@/lib/platform/access";
 import { staffCan } from "@/lib/platform/roles";
-import { listBorrowers, type BorrowerRow } from "@/lib/platform/reports";
+import { listBorrowers } from "@/lib/platform/reports";
 
 export const metadata: Metadata = { title: "Borrowers" };
 export const dynamic = "force-dynamic";
@@ -35,87 +35,6 @@ export default async function BorrowersPage() {
   const signed = rows.filter((r) => r.signed > 0).length;
   const repeat = rows.filter((r) => r.as_borrower + r.as_participant > 1).length;
   const withAccount = rows.filter((r) => r.has_account).length;
-
-  const columns: Column<BorrowerRow>[] = [
-    {
-      key: "name",
-      label: "Borrower",
-      value: (r) => r.display_name ?? r.email,
-      render: (r) => (
-        <>
-          <span className="block font-semibold text-ink">
-            {r.display_name ?? "Unnamed"}
-          </span>
-          <span className="mt-0.5 block text-xs text-ink-muted">{r.email}</span>
-        </>
-      ),
-    },
-    {
-      key: "phone",
-      label: "Phone",
-      secondary: true,
-      value: (r) => r.phone,
-      render: (r) => r.phone ?? <span className="text-ink-muted">—</span>,
-    },
-    {
-      key: "borrower",
-      label: "As borrower",
-      align: "right",
-      value: (r) => r.as_borrower,
-      render: (r) => r.as_borrower,
-    },
-    {
-      key: "participant",
-      label: "As participant",
-      align: "right",
-      secondary: true,
-      value: (r) => r.as_participant,
-      render: (r) =>
-        r.as_participant > 0 ? r.as_participant : <span className="text-ink-muted">—</span>,
-    },
-    {
-      key: "signed",
-      label: "Signed",
-      align: "right",
-      value: (r) => r.signed,
-      render: (r) => (
-        <span className={r.signed > 0 ? "font-semibold text-ink" : "text-ink-muted"}>
-          {r.signed}
-        </span>
-      ),
-    },
-    {
-      key: "lenders",
-      label: "Lenders",
-      align: "right",
-      secondary: true,
-      value: (r) => r.lenders_used,
-      render: (r) => r.lenders_used,
-    },
-    {
-      key: "states",
-      label: "States",
-      secondary: true,
-      value: (r) => (r.states ?? []).join(" "),
-      render: (r) => (
-        <span className="font-mono text-[11px] text-ink-soft">
-          {(r.states ?? []).join(" ") || "—"}
-        </span>
-      ),
-    },
-    {
-      key: "last",
-      label: "Last signed",
-      align: "right",
-      value: (r) => r.last_signed_at,
-      render: (r) =>
-        r.last_signed_at ? (
-          new Date(r.last_signed_at).toLocaleDateString()
-        ) : (
-          <span className="text-ink-muted">never</span>
-        ),
-    },
-  ];
 
   return (
     <Container className="py-14 sm:py-20">
@@ -156,19 +75,7 @@ export default async function BorrowersPage() {
 
       <div className="mt-8">
         <Panel title="Everyone" description="Search on a name, an email or a state.">
-          <ReportTable
-            rows={rows}
-            columns={columns}
-            initialSort={{ key: "last", ascending: false }}
-            searchable={(r) => [
-              r.display_name,
-              r.email,
-              r.phone,
-              (r.states ?? []).join(" "),
-            ]}
-            exportHref="/api/admin/reports/borrowers"
-            empty="No borrower matches that."
-          />
+          <BorrowerTable rows={rows} />
         </Panel>
       </div>
     </Container>

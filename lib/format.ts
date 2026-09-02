@@ -5,6 +5,34 @@
  * The only place a decimal point appears is here, on the way to a screen.
  */
 
+/**
+ * Short forms for dashboards: 1284 -> "1,284", 12903 -> "12.9K".
+ *
+ * HERE RATHER THAN IN components/charts.tsx, WHICH IS WHERE THEY STARTED. That
+ * file is `"use client"`, and every export of a client module becomes a client
+ * REFERENCE — a server component may pass one to a client component as a prop,
+ * but calling one throws "Attempted to call compact() from the server but compact
+ * is on the client". The Trends page calls them to fill in stat tiles, so they
+ * have to live somewhere that belongs to neither side. This module already did.
+ *
+ * `next build` cannot catch that mistake: every admin page is `force-dynamic`, so
+ * none of them is ever rendered during a build, and the error arrives only when a
+ * signed-in staff member opens the page.
+ */
+export function compact(n: number): string {
+  if (Math.abs(n) >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (Math.abs(n) >= 10_000) return `${(n / 1_000).toFixed(1)}K`;
+  return n.toLocaleString("en-US");
+}
+
+/** The same, for integer cents. `$4.2M`, `$12.9K`, `$840`. */
+export function money(cents: number): string {
+  const dollars = cents / 100;
+  if (Math.abs(dollars) >= 1_000_000) return `$${(dollars / 1_000_000).toFixed(1)}M`;
+  if (Math.abs(dollars) >= 10_000) return `$${(dollars / 1_000).toFixed(1)}K`;
+  return `$${dollars.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+}
+
 export function formatCents(cents: number | null | undefined): string {
   if (cents === null || cents === undefined) return "—";
   return (cents / 100).toLocaleString("en-US", {
