@@ -10,6 +10,12 @@ import {
   zoneAbbreviation,
   zoneDifferenceHours,
 } from "@/lib/format";
+import {
+  activitiesOpenIn,
+  coverAvailable,
+  type OriginatorKind,
+  type ReadinessRow,
+} from "@/lib/readiness";
 import { DeviceContactPicker } from "./DeviceContactPicker";
 import type { Asset } from "./AssetsManager";
 import type { Contact } from "./ContactsManager";
@@ -50,12 +56,24 @@ export type RequestPrefill = {
 
 export function NewAgreementForm({
   states,
+  readiness,
+  originatorKind,
   assets = [],
   contacts = [],
   prefill,
   readerZone,
 }: {
   states: OpenState[];
+  /**
+   * Every (state, activity) combination, including the ones that are not open.
+   *
+   * Passed whole rather than pre-filtered because the activity list has to be
+   * recomputed on the client every time the state changes, and a round trip to do
+   * that would put a spinner in the middle of a two-field question.
+   */
+  readiness: ReadinessRow[];
+  /** Which wording this lender's documents come from. See the page for why it is fixed. */
+  originatorKind: OriginatorKind;
   assets?: Asset[];
   contacts?: Contact[];
   prefill?: RequestPrefill;
@@ -72,9 +90,44 @@ export function NewAgreementForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // The borrower's request names a state, but only if it is still one we offer.
+  // An intake code is a physical thing — printed, laminated, stuck to a jet ski —
+  // and it long outlives the availability it was created under. A stale one
+  // falling back to the first open state is better than a select bound to a value
+  // that has no option, which renders blank and submits nothing.
   const [state, setState] = useState(
-    prefill?.jurisdiction ?? states[0]?.state ?? "FL",
+    states.some((s) => s.state === prefill?.jurisdiction)
+      ? (prefill?.jurisdiction as string)
+      : (states[0]?.state ?? "FL"),
   );
+
+  // The activities this lender can actually get a document out of in this state.
+  //
+  // Recomputed per state rather than fixed, because it genuinely varies: opening
+  // a state is done one activity at a time, and Florida being open for jet skis
+  // says nothing about Florida being open for boating. Until this cascade existed
+  // the list was four hardcoded options everywhere, and picking the wrong one
+  // failed at the moment of pressing the button with "there is no boating
+  // template for FL yet" — which is true, and is not a thing to learn there.
+  const openActivities = activitiesOpenIn(readiness, state, originatorKind);
+
+  const [activity, setActivity] = useState(
+    () => openActivities[0]?.activity_class ?? "",
+  );
+
+  // Changing the state can strand the chosen activity: FL is open for jet skis,
+  // and the next state along may not be. Snapping to the first available one is
+  // the honest repair — leaving a stale value selected would submit a
+  // combination the form has just stopped offering.
+  useEffect(() => {
+    if (openActivities.some((a) => a.activity_class === activity)) return;
+    setActivity(openActivities[0]?.activity_class ?? "");
+    // `openActivities` is derived from state and would be a new array each
+    // render; the state code is what actually changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state]);
+
+  const chosenActivity = openActivities.find((a) => a.activity_class === activity);
 
   // The clock this window is written in. The state of activity decides it, not
   // the desk the form is filled in at: the jet ski is in Florida whoever is
@@ -184,7 +237,12 @@ export function NewAgreementForm({
 
   // Nothing ticked and nothing being described. The API refuses this too, but
   // a disabled button says so before the round trip rather than after it.
-  const nothingSelected = picked.length === 0 && !addingNew;
+  //
+  // An empty activity is the second way to get here and only happens on a
+  // prefilled draft: a scanned request carries the intake link's state, and a
+  // code printed months ago can name a state that has since closed. Better to
+  // refuse than to post an empty activity_class and let the API decide.
+  const nothingSelected = (picked.length === 0 && !addingNew) || !activity;
 
   const chosen = states.find((s) => s.state === state);
 
@@ -572,11 +630,43 @@ export function NewAgreementForm({
           </Field>
 
           <Field label="Activity">
-            <select name="activity_class" defaultValue="personal_watercraft" className={input}>
-              <option value="personal_watercraft">Personal watercraft</option>
+            <select
+              name="activity_class"
+              value={activity}
+              onChange={(e) => setActivity(e.target.value)}
+              className={input}
+            >
+              {openActivities.map((a) => (
+                <option key={a.activity_class} value={a.activity_class}>
+                  {a.activity_label}
+                </option>
+              ))}
             </select>
           </Field>
         </div>
+
+        {/*
+          A state can be offered for one activity and closed for another, so the
+          list above is not the same length in every state. Saying which ones are
+          missing beats a silently shorter dropdown — the lender who wanted to
+          lend a boat needs to know that is a gap and not an oversight.
+        */}
+        {openActivities.length === 1 && (
+          <p className="mt-4 text-xs leading-relaxed text-ink-muted">
+            {state} is open for {openActivities[0].activity_label.toLowerCase()} only.
+            Each activity is opened separately — it needs its own carrier filing and
+            its own reviewed wording.
+          </p>
+        )}
+
+        {chosenActivity && !coverAvailable(chosenActivity) && (
+          <p className="mt-4 rounded-xl border border-line bg-surface px-5 py-4 text-sm leading-relaxed text-ink-soft">
+            No carrier is filed for {chosenActivity.activity_label.toLowerCase()} in{" "}
+            {state}, so there is nothing to insure this loan with. The agreement
+            itself is unaffected — it will be signed, timestamped and kept the same
+            way — but do not tell the borrower they are covered.
+          </p>
+        )}
 
         {chosen?.waiver_efficacy === "void" && (
           <p className="rounded-xl border border-flag/30 bg-flag/[0.06] px-5 py-4 text-sm leading-relaxed text-flag">

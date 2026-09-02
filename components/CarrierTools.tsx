@@ -140,9 +140,20 @@ export function CarrierStatusControl({
 export function ProductForm({
   carrierId,
   canManage,
+  activities,
 }: {
   carrierId: string;
   canManage: boolean;
+  /**
+   * The activity vocabulary, from `activity_classes`.
+   *
+   * This field was a free-text box until 20260901000040. A product filed under
+   * `personal_watercaft` looked perfectly fine in this list, was returned by no
+   * query anybody ran, and produced "we are not open in FL" for an activity we
+   * were plainly open for. The database now refuses the typo; this list means
+   * nobody has to make it.
+   */
+  activities: { code: string; label: string }[];
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -208,12 +219,18 @@ export function ProductForm({
           </select>
         </Field>
         <Field label="Activity class">
-          <input
+          <select
             name="activity_class"
             required
-            defaultValue="personal_watercraft"
-            className={mono}
-          />
+            defaultValue={activities[0]?.code ?? ""}
+            className={input}
+          >
+            {activities.map((a) => (
+              <option key={a.code} value={a.code}>
+                {a.label}
+              </option>
+            ))}
+          </select>
         </Field>
         <Field label="Default limit (cents)">
           <input name="default_limit_cents" inputMode="numeric" className={mono} />

@@ -6,6 +6,12 @@ import { requireActor } from "@/lib/agreements/access";
 import { CodesManager, type IntakeLinkRow } from "@/components/CodesManager";
 import type { Asset } from "@/components/AssetsManager";
 import type { OpenState } from "@/components/NewAgreementForm";
+import {
+  READINESS_COLUMNS,
+  statesOpenFor,
+  type OriginatorKind,
+  type ReadinessRow,
+} from "@/lib/readiness";
 
 export const metadata: Metadata = { title: "Your codes" };
 export const dynamic = "force-dynamic";
@@ -28,12 +34,27 @@ export default async function CodesPage() {
       .select("id, asset_class, description, identifier, declared_value_cents, year, make, model")
       .is("archived_at", null)
       .order("created_at", { ascending: false }),
+    // The same readiness matrix the lend form reads, and for a sharper reason
+    // here: a code is PRINTED. Offering a combination that cannot produce a
+    // document puts a sticker on a trailer that turns away every borrower who
+    // scans it, and nobody finds out until one of them complains.
     supabase
-      .from("state_availability")
-      .select("state, status, waiver_efficacy")
-      .neq("status", "unavailable")
+      .from("state_activity_readiness")
+      .select(READINESS_COLUMNS)
       .order("state"),
   ]);
+
+  const readiness = (stateRows ?? []) as ReadinessRow[];
+
+  // Fixed for the same reason as on the lend form: every draft a scan can lead to
+  // is created by POST /api/agreements, which originates as an individual.
+  const kind: OriginatorKind = "individual";
+
+  const states: OpenState[] = statesOpenFor(readiness, kind).map((s) => ({
+    state: s.state,
+    status: s.status,
+    waiver_efficacy: s.waiverEfficacy,
+  }));
 
   const { data: linkRows } = originatorIds.length
     ? await db
@@ -60,7 +81,9 @@ export default async function CodesPage() {
         <CodesManager
           links={(linkRows ?? []) as IntakeLinkRow[]}
           assets={(assetRows ?? []) as Asset[]}
-          states={(stateRows ?? []) as OpenState[]}
+          states={states}
+          readiness={readiness}
+          originatorKind={kind}
         />
       </div>
     </Container>

@@ -1,7 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import {
+  activitiesOpenIn,
+  type OriginatorKind,
+  type ReadinessRow,
+} from "@/lib/readiness";
 import { QrCode } from "./QrCode";
 import type { Asset } from "./AssetsManager";
 import type { OpenState } from "./NewAgreementForm";
@@ -15,13 +20,6 @@ export type IntakeLinkRow = {
   jurisdiction: string;
   created_at: string;
 };
-
-const ACTIVITY_CLASSES = [
-  { value: "personal_watercraft", label: "Jet ski / personal watercraft" },
-  { value: "boating", label: "Boating" },
-  { value: "towing", label: "Towing a trailer" },
-  { value: "equipment_use", label: "Using equipment" },
-];
 
 const input =
   "w-full rounded-xl border border-line bg-paper px-4 py-3 text-sm text-ink outline-none transition-colors focus:border-ink/40";
@@ -39,16 +37,36 @@ export function CodesManager({
   links,
   assets,
   states,
+  readiness,
+  originatorKind,
 }: {
   links: IntakeLinkRow[];
   assets: Asset[];
   states: OpenState[];
+  readiness: ReadinessRow[];
+  originatorKind: OriginatorKind;
 }) {
   const router = useRouter();
   const [making, setMaking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showing, setShowing] = useState<string | null>(null);
+
+  // The state on the form, held rather than left uncontrolled, because the
+  // activity list below it depends on the answer. Same cascade as the lend form:
+  // a code names a state AND an activity, and the pair has to be one the product
+  // can actually produce a document for.
+  const [state, setState] = useState(states[0]?.state ?? "FL");
+  const openActivities = activitiesOpenIn(readiness, state, originatorKind);
+  const [activity, setActivity] = useState(
+    () => openActivities[0]?.activity_class ?? "",
+  );
+
+  useEffect(() => {
+    if (openActivities.some((a) => a.activity_class === activity)) return;
+    setActivity(openActivities[0]?.activity_class ?? "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state]);
 
   const origin = typeof window === "undefined" ? "" : window.location.origin;
 
@@ -157,6 +175,28 @@ export function CodesManager({
         >
           + Make a code
         </button>
+      ) : openActivities.length === 0 ? (
+        /*
+          No state we are open in can produce a document for this lender, so there
+          is nothing a code could lead to. Refusing here rather than rendering two
+          empty dropdowns matters more on this screen than on the lend form: a code
+          is printed and stuck to a trailer, and one made against a combination
+          that refuses every scan is discovered by a borrower standing at a counter.
+        */
+        <div className="rounded-2xl border border-line bg-surface/40 p-5">
+          <p className="text-sm leading-relaxed text-ink-soft">
+            There is nowhere a code could lead yet. A code names a state and an
+            activity, and that pair needs a rule set and wording counsel has
+            published before anyone scanning it could be given a document.
+          </p>
+          <button
+            type="button"
+            onClick={() => setMaking(false)}
+            className="mt-4 text-xs font-semibold text-accent underline"
+          >
+            Back
+          </button>
+        </div>
       ) : (
         <form onSubmit={create} className="space-y-5 rounded-2xl border border-line bg-surface/40 p-5">
           <label className="block">
@@ -190,7 +230,12 @@ export function CodesManager({
               <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink-muted">
                 Where it happens
               </span>
-              <select name="jurisdiction" defaultValue={states[0]?.state ?? "FL"} className={input}>
+              <select
+                name="jurisdiction"
+                value={state}
+                onChange={(e) => setState(e.target.value)}
+                className={input}
+              >
                 {states.map((option) => (
                   <option key={option.state} value={option.state}>
                     {option.state}
@@ -202,10 +247,15 @@ export function CodesManager({
               <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink-muted">
                 What kind of activity
               </span>
-              <select name="activity_class" defaultValue="personal_watercraft" className={input}>
-                {ACTIVITY_CLASSES.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
+              <select
+                name="activity_class"
+                value={activity}
+                onChange={(e) => setActivity(e.target.value)}
+                className={input}
+              >
+                {openActivities.map((option) => (
+                  <option key={option.activity_class} value={option.activity_class}>
+                    {option.activity_label}
                   </option>
                 ))}
               </select>

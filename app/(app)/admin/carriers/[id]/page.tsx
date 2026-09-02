@@ -22,6 +22,7 @@ import {
   type FilingStatus,
 } from "@/lib/coverage/admin";
 import { registeredAdapters } from "@/lib/coverage/carrier";
+import { listActivityClasses } from "@/lib/activities";
 
 export const metadata: Metadata = { title: "Carrier" };
 export const dynamic = "force-dynamic";
@@ -46,6 +47,8 @@ export default async function CarrierPage({
 
   const { carrier, products, credentials, events } = await carrierDetail(staff.db, id);
   if (!carrier) notFound();
+
+  const activities = await listActivityClasses(staff.db);
 
   const canManage = staffCan(staff.role, "carriers.manage");
   const canFile = staffCan(staff.role, "carriers.filings");
@@ -217,7 +220,7 @@ export default async function CarrierPage({
           )}
 
           <div className="space-y-5">
-            <ProductForm carrierId={id} canManage={canManage} />
+            <ProductForm carrierId={id} canManage={canManage} activities={activities} />
             <FilingForm
               carrierId={id}
               products={products as { id: string; product_code: string; display_name: string }[]}

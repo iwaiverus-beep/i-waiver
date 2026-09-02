@@ -142,13 +142,19 @@ export async function logStaffAction(
       | "partner_application"
       | "partner_integration"
       | "partner_branding"
+      | "partner_prospect"
       | "carrier"
       | "carrier_product"
       | "carrier_filing"
       | "carrier_credential"
       | "support_ticket"
       | "platform_staff"
-      | "state_availability";
+      | "state_availability"
+      // Neither of these has a uuid, so `subjectId` stays null and the state code
+      // or activity code goes in `detail`. `staff_actions.subject_id` is a uuid
+      // column and putting 'FL' in it would fail the insert, which the logger
+      // deliberately swallows — the row would simply never appear.
+      | "activity_class";
     subjectId?: string | null;
     detail?: Record<string, unknown>;
   },
