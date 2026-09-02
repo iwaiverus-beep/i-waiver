@@ -1,6 +1,6 @@
 import "server-only";
 
-import { emailFrom, resendApiKey } from "@/lib/env";
+import { emailFrom, resendApiKey, supportEmail } from "@/lib/env";
 
 /**
  * Outbound email.
@@ -49,6 +49,20 @@ export async function sendEmail(message: {
     body: JSON.stringify({
       from: emailFrom(),
       to: [message.to],
+      // Somewhere a reply can land.
+      //
+      // The From address is `notifications@`, which is a sending identity and not
+      // a mailbox anybody reads. Without this, hitting reply on a waiver — the
+      // single most natural thing a confused borrower does — sends a question
+      // into nothing, and they are left with a document they did not understand
+      // and no way to ask.
+      //
+      // It is also read by the receiver. A transactional message from a five-day-
+      // old domain, carrying one opaque link and no route back to a human, is
+      // shaped exactly like a phishing attempt; a Reply-To that resolves is one
+      // of the few signals separating the two. Not decisive on its own —
+      // reputation is earned by volume over time — but free and true.
+      reply_to: supportEmail(),
       subject: message.subject,
       // Plain text only, deliberately. A signing link that arrives looking like a
       // marketing email is a signing link that lands in spam.
