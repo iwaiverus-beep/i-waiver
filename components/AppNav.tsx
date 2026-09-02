@@ -16,11 +16,21 @@ import { usePathname } from "next/navigation";
  * enough space between them and the pill that it does not read as a fourth tab —
  * a divider used to do that job and is no longer needed.
  *
+ * ON A PHONE THIS ROW IS NOT HERE AT ALL. Four pills across a narrow screen wrap
+ * onto two lines and eat the top of every page before it has said anything, so
+ * below `sm` all four move behind the mark in the header — see `AppNavMenu`.
+ * This component still owns the list; the menu reads it from here, because two
+ * copies of a nav are two navs that will disagree.
+ *
  * Account is not here. It lives in the header's top-right corner with sign out,
  * where a browser-shaped habit expects to find it, and this row is left to the
  * three places inside the product.
  */
-const LINKS = [
+
+/** Lending something. First everywhere it appears, because it is the point. */
+export const LEND_ACTION = { href: "/agreements/new", label: "Lend something" };
+
+export const LENDER_LINKS = [
   // `?as=lender` is what tells /dashboard not to bounce a staff member into the
   // console. Without it, somebody who works here and also lends their own things
   // could reach the other two tabs and never get back to the first.
@@ -33,46 +43,59 @@ const LINKS = [
   { href: "/contacts", label: "People" },
 ];
 
+/**
+ * Whether a tab is the page being looked at.
+ *
+ * Compared on the path alone. `usePathname` never carries a query string, so
+ * matching the whole href would leave the Agreements tab permanently
+ * unhighlighted now that it carries `?as=lender`.
+ */
+export function navActive(pathname: string, href: string): boolean {
+  const path = href.split("?")[0];
+  return pathname === path || pathname.startsWith(`${path}/`);
+}
+
 export function AppNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="mb-10 flex flex-wrap items-center gap-2 border-b border-line pb-4">
-      <Link
-        href="/agreements/new"
-        className="inline-flex items-center rounded-full bg-accent px-5 py-2 text-sm font-semibold text-paper transition-colors hover:bg-accent-hover"
-      >
-        Lend something
-      </Link>
-
+    <>
       {/*
-        Right on a wide screen, and straight under the pill on a narrow one.
-        `ml-auto` only from `sm`, because pushing three tabs to the right edge of
-        a phone leaves them stranded away from the thumb with a gap where the
-        eye expects the next thing.
+        What the hidden row leaves behind on a phone. The lender pages set
+        `pt-0` below `sm` because this nav supplied their top margin; with the
+        nav gone, the first heading would sit hard against the header.
       */}
-      <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
-        {LINKS.map((link) => {
-          // Compared on the path alone. `usePathname` never carries a query
-          // string, so matching the whole href would leave the Agreements tab
-          // permanently unhighlighted now that it carries `?as=lender`.
-          const path = link.href.split("?")[0];
-          const active = pathname === path || pathname.startsWith(`${path}/`);
-          return (
-            <Link
-              key={link.href}
-              href={link.href}
-              className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
-                active
-                  ? "bg-ink text-paper"
-                  : "text-ink-soft hover:bg-surface hover:text-ink"
-              }`}
-            >
-              {link.label}
-            </Link>
-          );
-        })}
-      </div>
-    </nav>
+      <div className="h-6 sm:hidden" />
+
+      <nav className="mb-10 hidden flex-wrap items-center gap-2 border-b border-line pb-4 sm:flex">
+        <Link
+          href={LEND_ACTION.href}
+          className="inline-flex items-center rounded-full bg-accent px-5 py-2 text-sm font-semibold text-paper transition-colors hover:bg-accent-hover"
+        >
+          {LEND_ACTION.label}
+        </Link>
+
+        {/* Hard right, which is what puts enough space between the tabs and the
+            pill that they do not read as a fourth one. */}
+        <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
+          {LENDER_LINKS.map((link) => {
+            const active = navActive(pathname, link.href);
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+                  active
+                    ? "bg-ink text-paper"
+                    : "text-ink-soft hover:bg-surface hover:text-ink"
+                }`}
+              >
+                {link.label}
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
+    </>
   );
 }
