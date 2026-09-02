@@ -27,14 +27,19 @@ export const dynamic = "force-dynamic";
 export default async function NewAgreementPage({
   searchParams,
 }: {
-  searchParams: Promise<{ request?: string }>;
+  searchParams: Promise<{ request?: string; asset?: string; contact?: string }>;
 }) {
   const supabase = await userClient();
 
   // `?request=` means a borrower scanned a code and this lender is looking at what
   // they asked for. Loaded through requestForActor, which refuses a request
   // belonging to somebody else — the id is in a URL a lender can edit.
-  const { request: requestId } = await searchParams;
+  //
+  // `?asset=` is the quieter one: Lend, pressed on a saved thing. It opens the
+  // same form with that item ticked and nothing else assumed. `?contact=` is the
+  // same idea from the other side — Lend again, pressed on a person.
+  const { request: requestId, asset: assetId, contact: contactId } =
+    await searchParams;
   let prefill: RequestPrefill | undefined;
   if (requestId) {
     const { db, originatorIds } = await requireActor();
@@ -123,6 +128,29 @@ export default async function NewAgreementPage({
   const assets = (assetRows ?? []) as Asset[];
   const contacts = (contactRows ?? []) as Contact[];
 
+  // Lend, pressed on a card. Checked against the list this lender can actually
+  // see rather than trusted: the id sits in a URL, and an unknown one should
+  // open an ordinary empty form instead of ticking something invisible.
+  if (!prefill && assetId && assets.some((row) => row.id === assetId)) {
+    prefill = {
+      borrowerName: "",
+      borrowerEmail: "",
+      assetIds: [assetId],
+      startsAt: null,
+      endsAt: null,
+      jurisdiction: null,
+      note: null,
+    };
+  }
+
+  // Lend again, pressed on a person. Checked against this lender's own list for
+  // the same reason as the asset above. A scanned request wins if both arrive:
+  // it names the borrower who is actually standing there.
+  const openWith =
+    !requestId && contactId && contacts.some((person) => person.id === contactId)
+      ? contactId
+      : undefined;
+
   return (
     <Container className="py-14 sm:py-20">
       <div className="mx-auto max-w-2xl">
@@ -148,6 +176,7 @@ export default async function NewAgreementPage({
               originatorKind={kind}
               assets={assets}
               contacts={contacts}
+              initialContactId={openWith}
               prefill={prefill}
               readerZone={readerZone}
             />

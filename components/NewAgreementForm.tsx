@@ -44,7 +44,11 @@ const ASSET_CLASSES = [
  * created by the same route, the same way, after somebody has actually read it.
  */
 export type RequestPrefill = {
-  requestId: string;
+  /**
+   * Absent when the form was opened by pressing Lend on a saved item. Only a
+   * scanned request has one, and only a request has to be closed on send.
+   */
+  requestId?: string;
   borrowerName: string;
   borrowerEmail: string;
   assetIds: string[];
@@ -60,6 +64,7 @@ export function NewAgreementForm({
   originatorKind,
   assets = [],
   contacts = [],
+  initialContactId,
   prefill,
   readerZone,
 }: {
@@ -76,6 +81,13 @@ export function NewAgreementForm({
   originatorKind: OriginatorKind;
   assets?: Asset[];
   contacts?: Contact[];
+  /**
+   * Open with this person already picked — "Lend again", from the People screen.
+   *
+   * Only ever an id out of `contacts`; the page checks it against the lender's
+   * own list before passing it, so there is nothing to validate here.
+   */
+  initialContactId?: string;
   prefill?: RequestPrefill;
   /**
    * The lender's own clock, from their profile. Null follows the browser.
@@ -192,10 +204,19 @@ export function NewAgreementForm({
   const [addingNew, setAddingNew] = useState(
     assets.length === 0 && !(prefill?.assetIds.length ?? 0),
   );
-  const [contactId, setContactId] = useState("");
-  const [borrowerName, setBorrowerName] = useState(prefill?.borrowerName ?? "");
-  const [borrowerEmail, setBorrowerEmail] = useState(prefill?.borrowerEmail ?? "");
-  const [saveContact, setSaveContact] = useState(true);
+  // Arriving from "Lend again": exactly what picking them from the select would
+  // have set, set before the first paint rather than after it.
+  const openWith = contacts.find((person) => person.id === initialContactId);
+
+  const [contactId, setContactId] = useState(openWith?.id ?? "");
+  const [borrowerName, setBorrowerName] = useState(
+    prefill?.borrowerName ?? openWith?.display_name ?? "",
+  );
+  const [borrowerEmail, setBorrowerEmail] = useState(
+    prefill?.borrowerEmail ?? openWith?.email ?? "",
+  );
+  // Already in the list, so there is nothing to offer to save.
+  const [saveContact, setSaveContact] = useState(!openWith);
 
   function chooseContact(id: string) {
     setContactId(id);

@@ -1,7 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { DeviceContactPicker } from "./DeviceContactPicker";
+import { ContactHistory } from "./ContactHistory";
 
 export type Contact = {
   id: string;
@@ -34,9 +36,9 @@ export function ContactsManager({ initial }: { initial: Contact[] }) {
   const [contacts, setContacts] = useState(initial);
   const [adding, setAdding] = useState(initial.length === 0);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [historyId, setHistoryId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
 
-  const searchable = contacts.length > 5;
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
     if (!needle) return contacts;
@@ -78,11 +80,11 @@ export function ContactsManager({ initial }: { initial: Contact[] }) {
           >
             Add someone
           </button>
-          {searchable && (
+          {contacts.length > 0 && (
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search people"
+              placeholder="Search by name, email or phone"
               type="search"
               aria-label="Search people"
               className="w-full max-w-xs rounded-full border border-line bg-paper px-4 py-2.5 text-sm text-ink outline-none focus:border-accent"
@@ -124,17 +126,39 @@ export function ContactsManager({ initial }: { initial: Contact[] }) {
           ) : (
             <div
               key={contact.id}
-              className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-line bg-paper px-5 py-4"
+              className="rounded-2xl border border-line bg-paper px-5 py-4"
             >
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-ink">
-                  {contact.display_name}
-                </p>
-                <p className="truncate text-sm text-ink-soft">
-                  {[contact.email, contact.phone].filter(Boolean).join(" · ") || "—"}
-                </p>
+              {/* The name and the one thing anybody comes to this screen to do,
+                  on the same line. Lending to the same handful of people again is
+                  the whole reason the list exists, so it leads rather than sitting
+                  in a row of equal-weight buttons underneath. */}
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-ink">
+                    {contact.display_name}
+                  </p>
+                  <p className="truncate text-sm text-ink-soft">
+                    {[contact.email, contact.phone].filter(Boolean).join(" · ") || "—"}
+                  </p>
+                </div>
+                <Link
+                  href={`/agreements/new?contact=${contact.id}`}
+                  className="shrink-0 rounded-full bg-accent px-4 py-2 text-xs font-semibold text-paper transition-colors hover:bg-accent-hover"
+                >
+                  Lend again
+                </Link>
               </div>
-              <div className="flex items-center gap-2">
+
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() =>
+                    setHistoryId(historyId === contact.id ? null : contact.id)
+                  }
+                  aria-expanded={historyId === contact.id}
+                  className="rounded-full border border-line px-4 py-2 text-xs font-semibold text-ink transition-colors hover:border-ink/40"
+                >
+                  {historyId === contact.id ? "Hide history" : "History"}
+                </button>
                 {/* A plain link, not fetch(): the download only becomes an OS
                     Add Contact sheet if the browser handles the response itself. */}
                 <a
@@ -159,11 +183,15 @@ export function ContactsManager({ initial }: { initial: Contact[] }) {
                   Remove
                 </button>
               </div>
+
+              {historyId === contact.id && (
+                <ContactHistory contactId={contact.id} />
+              )}
             </div>
           ),
         )}
 
-        {searchable && visible.length === 0 && (
+        {query.trim() && visible.length === 0 && (
           <p className="rounded-2xl border border-dashed border-line px-5 py-8 text-center text-sm text-ink-muted">
             Nobody matches that.
           </p>
