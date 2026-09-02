@@ -23,16 +23,16 @@ export default function HomePage() {
           <div className="max-w-3xl">
             <Eyebrow>{LIVE ? BRAND.tagline : "In development"}</Eyebrow>
             <H1>
-              A handshake is not a record.
+              A handshake is nice.
               <br />
-              <span className="text-accent">Make the loan count.</span>
+              <span className="text-accent">Signed and covered is better.</span>
             </H1>
             <Lede>
-              When you lend a jet ski, a trailer, or a track day to someone, the
-              part that matters happens later — when something goes wrong and
-              nobody can prove what was agreed. {BRAND.name} turns the loan into
-              a signed agreement both parties keep, with cover for the loan
-              period built into the same signature.
+              Lend your stuff, worry-free. When you lend a jet ski, a trailer, or
+              a track day to someone, the part that matters happens later — when
+              something goes wrong and nobody can prove what was agreed.{" "}
+              {BRAND.name} turns the loan into a signed agreement both parties
+              keep, with cover for the loan period built into the same signature.
             </Lede>
             <div className="mt-10 flex flex-wrap gap-4">
               <Button href={PRIMARY_CTA.href}>{PRIMARY_CTA.label}</Button>
