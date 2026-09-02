@@ -116,6 +116,7 @@ export function ContactsManager({ initial }: { initial: Contact[] }) {
               submitLabel="Save changes"
               cancellable
               onCancel={() => setEditingId(null)}
+              onRemove={() => archive(contact)}
               onSaved={(updated) => {
                 setContacts((current) =>
                   current.map((c) => (c.id === updated.id ? updated : c)),
@@ -167,6 +168,9 @@ export function ContactsManager({ initial }: { initial: Contact[] }) {
                 >
                   Save to phone
                 </a>
+                {/* Removing is not offered here. It sat one tap from Edit on a
+                    row of otherwise harmless buttons, which is a mis-tap waiting
+                    to happen — it lives inside the edit form now. */}
                 <button
                   onClick={() => {
                     setAdding(false);
@@ -175,12 +179,6 @@ export function ContactsManager({ initial }: { initial: Contact[] }) {
                   className="rounded-full border border-line px-4 py-2 text-xs font-semibold text-ink transition-colors hover:border-ink/40"
                 >
                   Edit
-                </button>
-                <button
-                  onClick={() => archive(contact)}
-                  className="rounded-full px-3 py-2 text-xs font-semibold text-ink-muted transition-colors hover:text-flag"
-                >
-                  Remove
                 </button>
               </div>
 
@@ -209,6 +207,7 @@ function ContactForm({
   cancellable,
   onSaved,
   onCancel,
+  onRemove,
 }: {
   contact?: Contact;
   heading: string;
@@ -216,6 +215,8 @@ function ContactForm({
   cancellable: boolean;
   onSaved: (contact: Contact) => void;
   onCancel: () => void;
+  /** Only passed when editing. Taking somebody off the list belongs behind Edit. */
+  onRemove?: () => void;
 }) {
   const [name, setName] = useState(contact?.display_name ?? "");
   const [email, setEmail] = useState(contact?.email ?? "");
@@ -328,6 +329,14 @@ function ContactForm({
             className="rounded-full border border-line px-5 py-2.5 text-sm font-semibold text-ink"
           >
             Cancel
+          </button>
+        )}
+        {onRemove && (
+          <button
+            onClick={onRemove}
+            className="ml-auto rounded-full px-4 py-2.5 text-sm font-semibold text-ink-muted transition-colors hover:text-flag"
+          >
+            Remove
           </button>
         )}
       </div>

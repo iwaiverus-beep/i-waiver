@@ -58,44 +58,39 @@ export function navActive(pathname: string, href: string): boolean {
 export function AppNav() {
   const pathname = usePathname();
 
+  // Nothing stands in for this row on a phone, deliberately. The lender pages
+  // set `pt-0` below `sm`, so the title starts immediately under the header —
+  // which is the point of moving the nav into the corner: a short screen should
+  // open on its content, not on a band of empty paper.
   return (
-    <>
-      {/*
-        What the hidden row leaves behind on a phone. The lender pages set
-        `pt-0` below `sm` because this nav supplied their top margin; with the
-        nav gone, the first heading would sit hard against the header.
-      */}
-      <div className="h-6 sm:hidden" />
+    <nav className="mb-10 hidden flex-wrap items-center gap-2 border-b border-line pb-4 sm:flex">
+      <Link
+        href={LEND_ACTION.href}
+        className="inline-flex items-center rounded-full bg-accent px-5 py-2 text-sm font-semibold text-paper transition-colors hover:bg-accent-hover"
+      >
+        {LEND_ACTION.label}
+      </Link>
 
-      <nav className="mb-10 hidden flex-wrap items-center gap-2 border-b border-line pb-4 sm:flex">
-        <Link
-          href={LEND_ACTION.href}
-          className="inline-flex items-center rounded-full bg-accent px-5 py-2 text-sm font-semibold text-paper transition-colors hover:bg-accent-hover"
-        >
-          {LEND_ACTION.label}
-        </Link>
-
-        {/* Hard right, which is what puts enough space between the tabs and the
-            pill that they do not read as a fourth one. */}
-        <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
-          {LENDER_LINKS.map((link) => {
-            const active = navActive(pathname, link.href);
-            return (
-              <Link
-                key={link.href}
-                href={link.href}
-                className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
-                  active
-                    ? "bg-ink text-paper"
-                    : "text-ink-soft hover:bg-surface hover:text-ink"
-                }`}
-              >
-                {link.label}
-              </Link>
-            );
-          })}
-        </div>
-      </nav>
-    </>
+      {/* Hard right, which is what puts enough space between the tabs and the
+          pill that they do not read as a fourth one. */}
+      <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
+        {LENDER_LINKS.map((link) => {
+          const active = navActive(pathname, link.href);
+          return (
+            <Link
+              key={link.href}
+              href={link.href}
+              className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+                active
+                  ? "bg-ink text-paper"
+                  : "text-ink-soft hover:bg-surface hover:text-ink"
+              }`}
+            >
+              {link.label}
+            </Link>
+          );
+        })}
+      </div>
+    </nav>
   );
 }
