@@ -12,10 +12,17 @@ import type { ReactNode } from "react";
  *
  * `pt-4` is deliberately small. The header is sticky and already draws a line
  * under itself, so the title needs separating from it, not launching off it —
- * and a phone has no room to spend on empty paper above the fold. From `sm`,
- * where there is room and the nav row is back, it opens up to the old 80px.
+ * and a phone has no room to spend on empty paper above the fold. A wide screen
+ * gets 40px rather than a phone's 16, which is enough to breathe and half what
+ * it used to be: 80px put the nav row a thumb's width down the page for no
+ * reason a reader could see.
+ *
+ * The bottom is smaller than it looks here. `AppFooter` used to add 80px of its
+ * own margin on top of this, which is what made the space under a short page
+ * read as a gap rather than an ending; it adds none now, and this is the whole
+ * distance from the last thing on the page to the rule above the small print.
  */
-export const PAGE_PADDING = "pb-14 pt-4 sm:py-20";
+export const PAGE_PADDING = "pb-10 pt-4 sm:pb-14 sm:pt-10";
 
 export function Container({
   children,

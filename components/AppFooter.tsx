@@ -15,8 +15,12 @@ import { Container } from "./ui";
  * the ones in here, so this is the last place to drop it.
  */
 export function AppFooter() {
+  // No top margin. It carried 80px, which sat on top of the page's own bottom
+  // padding and made the end of every short screen — the home screen most of all
+  // — read as a hole rather than an ending. The page decides how far it finishes
+  // above the rule; this only decides how the small print sits under it.
   return (
-    <footer className="mt-20 border-t border-line py-10">
+    <footer className="border-t border-line py-10">
       <Container>
         <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
           <p className="text-xs text-ink-muted">
