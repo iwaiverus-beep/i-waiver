@@ -170,6 +170,11 @@ export async function logStaffAction(
       | "carrier_credential"
       | "support_ticket"
       | "platform_staff"
+      // Support emulation. `subjectId` is the customer's user id, so the log
+      // answers "who has been looked at, and by whom" from the same table as
+      // every other staff act. The session itself is in `staff_emulations`;
+      // this row is what makes it visible beside the rest.
+      | "emulation"
       | "state_availability"
       // Neither of these has a uuid, so `subjectId` stays null and the state code
       // or activity code goes in `detail`. `staff_actions.subject_id` is a uuid

@@ -56,6 +56,21 @@ export type StaffCapability =
    * leaves the building is hard to call back.
    */
   | "marketing.read"
+  /**
+   * View the product as a customer, to troubleshoot a support call.
+   *
+   * The narrowest capability here alongside `partners.key.live`, and for a
+   * comparable reason: it is the only one that lets a member of staff see a
+   * customer's own screens, which is every asset they own, everyone they lend
+   * to and every agreement they hold. Read-only in every layer — see the header
+   * of lib/platform/emulation.ts — but "read-only" is not "harmless", and this
+   * deliberately does NOT sit on `support`, whose whole job is answering these
+   * calls. The lender and borrower reports already give support the facts
+   * needed to answer questions; walking around inside somebody's account is a
+   * different act, it is logged as one in `staff_emulations`, and it should
+   * require asking.
+   */
+  | "users.emulate"
   /** Read and reply to support tickets. */
   | "support.respond"
   /** Assign, prioritise and close tickets. */
@@ -80,6 +95,7 @@ const CAPABILITIES: Record<StaffRole, StaffCapability[]> = {
     "sandbox.purge",
     "reports.read",
     "marketing.read",
+    "users.emulate",
     "support.respond",
     "support.triage",
     "compliance.states",

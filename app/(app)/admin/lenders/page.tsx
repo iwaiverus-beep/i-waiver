@@ -5,9 +5,15 @@ import { PageIntro } from "@/components/PageIntro";
 import { Panel, Stat } from "@/components/app-ui";
 import { AdminNav } from "@/components/AdminNav";
 import { LenderTable } from "@/components/LenderTable";
+import { ViewAsCustomer } from "@/components/ViewAsCustomer";
 import { currentStaff } from "@/lib/platform/access";
 import { staffCan } from "@/lib/platform/roles";
 import { agreementStats, listLenders } from "@/lib/platform/reports";
+import {
+  EMULATION_MINUTES,
+  emulatableAccounts,
+  emulationConfigured,
+} from "@/lib/platform/emulation";
 
 export const metadata: Metadata = { title: "Lenders" };
 export const dynamic = "force-dynamic";
@@ -30,9 +36,17 @@ export default async function LendersPage() {
   if (!staff) notFound();
   if (!staffCan(staff.role, "reports.read")) notFound();
 
-  const [rows, stats] = await Promise.all([
+  // The picker lives on this screen rather than on one of its own. This is
+  // already "every lender on the platform", which is the list you are choosing
+  // from — and the admin console's rule is one screen per question, so a second
+  // page listing the same people to answer nearly the same question is exactly
+  // the duplication that has bitten this console before.
+  const canEmulate = staffCan(staff.role, "users.emulate");
+
+  const [rows, stats, accounts] = await Promise.all([
     listLenders(staff.db),
     agreementStats(staff.db),
+    canEmulate ? emulatableAccounts(staff.db) : Promise.resolve([]),
   ]);
 
   const dormant = rows.filter((r) => r.agreements_total === 0).length;
@@ -66,7 +80,19 @@ export default async function LendersPage() {
         />
       </div>
 
-      <div className="mt-8">
+      <div className="mt-8 space-y-8">
+        {canEmulate && (
+          <Panel
+            title="View as a customer"
+            description={`Opens their screens exactly as they see them, read-only, for ${EMULATION_MINUTES} minutes. Logged against your name.`}
+          >
+            <ViewAsCustomer
+              accounts={accounts}
+              configured={emulationConfigured()}
+            />
+          </Panel>
+        )}
+
         <Panel title="Everyone" description="Search on a name, an email or a state.">
           <LenderTable rows={rows} />
         </Panel>

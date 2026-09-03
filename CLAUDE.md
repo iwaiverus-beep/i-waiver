@@ -84,6 +84,7 @@ Where the application lives:
 | `lib/partners/prospects.ts` | the target list, before anybody is a partner. Holds no key and no way in. |
 | `lib/partners/vocabulary.ts` | the words both consoles render. No imports, no `server-only`. |
 | `lib/platform/` | our own staff: role capabilities, and the append-only staff action log. |
+| `lib/platform/emulation.ts` | viewing the product as one customer, for a support call. Reads only, and three separate layers say so. |
 | `lib/platform/reports.ts` | lenders, borrowers, agreement totals. Counts in SQL; reads no quote. |
 | `lib/coverage/reporting.ts` | quoted, bound, collected. The insurance half of the dashboard, on its own side of the boundary. |
 | `lib/support/` | tickets. One reader strips internal notes, and there is no flag that skips it. |

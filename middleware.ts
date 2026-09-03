@@ -1,5 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import {
+  EMULATION_COOKIE,
+  EMULATION_EXIT_PATH,
+} from "@/lib/platform/emulation-shared";
+
+/** Methods that cannot change anything, so are allowed during an emulation. */
+const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
 /**
  * Refreshes the Supabase session cookie on every matched request, and keeps
@@ -13,6 +20,62 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
  * route it posts to does its own checking on the service client.
  */
 export async function middleware(request: NextRequest) {
+  const path = request.nextUrl.pathname;
+
+  // ---------------------------------------------------------------------------
+  // Support emulation, before anything else.
+  //
+  // A staff member viewing a customer's screens may not change anything, and
+  // this is the layer that makes that true for requests nobody has written yet.
+  // The other two layers are narrower on purpose: `requireActor()` covers the
+  // lender routes, and Postgres refuses the evidence tables outright — but
+  // several API routes write through `userClient()`, which during an emulation
+  // is the customer's own client, and RLS does carry draft-stage write policies
+  // on `assets` and `contacts`. `/api/passkeys` is the sharp one: it registers a
+  // credential against `currentUser()`, so without this block a staff member
+  // could enrol their own device on a customer's account and walk back in
+  // unsupervised, forever.
+  //
+  // So: while the cookie is present, no request that could change anything is
+  // allowed to reach a handler at all. Method, not path — a list of paths is a
+  // list somebody forgets to add to.
+  //
+  // Cookie presence is enough here, and cannot be a database read: this runs on
+  // every request. The cookie's `maxAge` is the same as the row's lifetime, so
+  // the browser drops it as the session lapses, and the exit route clears it.
+  // Erring toward refusing is the right way for this check to be wrong.
+  // ---------------------------------------------------------------------------
+  const emulating = request.cookies.has(EMULATION_COOKIE);
+
+  if (emulating && !SAFE_METHODS.has(request.method)) {
+    // The way out cannot require the thing being blocked.
+    if (path !== EMULATION_EXIT_PATH) {
+      return NextResponse.json(
+        {
+          error:
+            "You are viewing this account as support and cannot change anything. Return to your own account first.",
+        },
+        { status: 403 },
+      );
+    }
+  }
+
+  // Nothing else here concerns /api. Returning early keeps the session refresh
+  // below — a round trip to the auth server — off every partner and coverage
+  // API call, which is why /api was not matched by this file before.
+  if (path.startsWith("/api/")) return NextResponse.next({ request });
+
+  // The console belongs to the operator, and during an emulation the operator is
+  // being the customer. `currentStaff()` already resolves to the customer and
+  // would 404 every admin page; sending them to the customer's own front door
+  // says what happened instead of looking like a broken link.
+  if (emulating && path.startsWith("/admin")) {
+    const home = request.nextUrl.clone();
+    home.pathname = "/home";
+    home.search = "";
+    return NextResponse.redirect(home);
+  }
+
   let response = NextResponse.next({ request });
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -43,7 +106,6 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const path = request.nextUrl.pathname;
   const isLenderArea =
     path.startsWith("/home") ||
     path.startsWith("/dashboard") ||
@@ -134,5 +196,9 @@ export const config = {
     "/partners/console/:path*",
     "/admin/:path*",
     "/login",
+    // Matched only so the emulation write block above can refuse a write before
+    // it reaches a handler. Everything /api-shaped returns from this file
+    // immediately afterwards, so no API call pays for the session refresh.
+    "/api/:path*",
   ],
 };

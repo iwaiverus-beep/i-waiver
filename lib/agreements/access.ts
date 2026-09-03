@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { serviceClient } from "@/lib/supabase/service";
 import { currentUser } from "@/lib/supabase/server";
+import { activeEmulation } from "@/lib/platform/emulation";
 
 /**
  * Authorisation for the lender-facing routes.
@@ -57,8 +58,29 @@ export async function originatorIdsFor(
   return [...ids];
 }
 
-/** Resolves the caller, or throws. Use at the top of every lender route. */
+/**
+ * Resolves the caller, or throws. Use at the top of every lender route.
+ *
+ * Refuses outright while a support emulation is live. This is the second of the
+ * three independent things that stop staff acting as a customer, and it is the
+ * one that matters most: the service client is the only thing in the product that
+ * CAN write the agreement graph, and every route that reaches it comes through
+ * here. The middleware refuses the request earlier and Postgres would refuse the
+ * write later; this is the layer that does not depend on either of them being
+ * configured correctly.
+ *
+ * Constraint 13. A staff member looking at a customer's screen must not be able
+ * to sign, send or void anything on that customer's behalf — a signature is a
+ * legal act by a named person, and there is no version of this feature where
+ * putting one in somebody else's name is acceptable.
+ */
 export async function requireActor(): Promise<Actor> {
+  if (await activeEmulation()) {
+    throw new NotAuthorised(
+      "You are viewing this account as support. Return to your own account to make changes.",
+    );
+  }
+
   const user = await currentUser();
   if (!user) throw new NotAuthorised("You need to be signed in.");
 

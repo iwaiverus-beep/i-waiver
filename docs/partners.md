@@ -361,11 +361,64 @@ are a 404 for that role and the tabs are not drawn. Every export writes a
 `staff_actions` row naming who took it: a file outlives the session, gets
 forwarded, and is the thing somebody eventually has to account for.
 
+`users.emulate` is narrower still, and sits only on `super_admin`. It lets a
+staff member open the product as one customer and walk through their screens —
+the answer to "the Send button isn't there", which is not a bug report and cannot
+be turned into one over the phone. Deliberately NOT granted to `support`, whose
+job this is: the lender and borrower reports already carry the facts needed to
+answer questions about an account, and walking around inside one is a different
+act. It should require asking, and it is recorded as its own thing.
+
+**How emulation stays read-only.** Three independent layers, none of which relies
+on anybody remembering to check:
+
+1. **The middleware refuses the method.** While the emulation cookie is present,
+   every request that is not GET/HEAD/OPTIONS is rejected before it reaches a
+   handler — the sole exception being the route that ends the session, because
+   the way out cannot require the thing being blocked. Method rather than path,
+   since a list of paths is a list somebody forgets to add to. This is what
+   covers the routes that write through `userClient()` rather than through
+   `requireActor()`; `/api/passkeys` is the sharp one, because without it a staff
+   member could enrol their own device on a customer's account and walk back in
+   unsupervised.
+2. **`requireActor()` throws.** Every lender route reaches the service client —
+   the only thing in the product that can write the agreement graph — through
+   that function, and it refuses outright while an emulation is live.
+3. **Postgres refuses.** The token minted for the session carries
+   `role: authenticated` and nothing else, so it cannot touch a table with no
+   write policy. That is every evidence table, per constraint 2.
+
+**How it avoids touching the customer's account.** It does not sign in as them.
+`lib/platform/emulation.ts` mints a short-lived token server-side, signed with the
+project's `SUPABASE_JWT_SECRET`, and uses it only for reads — so RLS produces
+exactly that person's view without special-casing a single query. The obvious
+alternative, minting a real session with the admin key, would write to the
+customer's auth record, show a sign-in they did not perform, and invalidate any
+login link sitting in their inbox — which is very often the exact thing the
+support call is about. Emulation is unavailable rather than degraded when the
+secret is absent.
+
+Each session is a `staff_emulations` row: who, whom, why, when, and a hard
+`expires_at` the server enforces whether or not anybody pressed the button. The
+row is append-only apart from being ended once, and a `staff_actions` row is
+written at both ends so emulation appears beside every other staff act. A banner
+sits above the header on every screen for the duration, saying whose account it
+is and counting down; it cannot be dismissed, because the whole hazard of a
+feature like this is forgetting it is on.
+
+Only customer accounts are offered — `platform_emulatable_accounts`, one row per
+(lender, person who can sign in as it), which excludes anybody holding a live
+staff grant. Emulating a colleague would turn "look at a customer's screen" into
+a way to inherit console access while the audit row named the wrong person. The
+route checks it again, because a list is presentation and that is authorisation.
+Partner console members are not in scope: membership there resolves by email
+address, and the emulated identity deliberately carries only a user id.
+
 **What staff still cannot do.** Nothing in these migrations opens a path into the
 evidence tables. `signatures`, `consent_records`, `documents`, `audit_events`,
 `compliance_checks` and `identity_verifications` have no write policy at all and
 gain none. A super admin cannot alter what somebody signed. Support looks; it does
-not rewrite history.
+not rewrite history — including while emulating, which is the whole design of it.
 
 ## Bootstrapping
 

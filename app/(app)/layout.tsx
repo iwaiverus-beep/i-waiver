@@ -1,5 +1,7 @@
 import { AppHeader } from "@/components/AppHeader";
 import { AppFooter } from "@/components/AppFooter";
+import { EmulationBanner } from "@/components/EmulationBanner";
+import { activeEmulation } from "@/lib/platform/emulation";
 
 /**
  * Everything behind a sign-in: the lender area, the partner console, and admin.
@@ -18,10 +20,29 @@ import { AppFooter } from "@/components/AppFooter";
  * The row of tabs is not here. Three different sections live in this group and
  * each brings its own — `AppNav`, `AdminNav`, `PartnerNav` — so this layout is
  * only the shell around them.
+ *
+ * The emulation banner IS here, and this is the only place it could be. It has
+ * to appear on every screen an operator could wander onto while viewing a
+ * customer's account, and putting it in each of them would mean the one page
+ * somebody forgot is the page where they mistake somebody else's data for their
+ * own. Above the header deliberately: the state it reports is more important
+ * than anything in the header, including who you are.
  */
-export default function AppLayout({ children }: { children: React.ReactNode }) {
+export default async function AppLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const emulation = await activeEmulation();
+
   return (
     <>
+      {emulation && (
+        <EmulationBanner
+          label={emulation.targetLabel}
+          expiresAt={emulation.expiresAt}
+        />
+      )}
       <AppHeader />
       <main className="flex-1">{children}</main>
       <AppFooter />

@@ -49,6 +49,22 @@ export const supabaseServiceRoleKey = () =>
 export const signingLinkPepper = () => required("SIGNING_LINK_TOKEN_PEPPER");
 
 /**
+ * The Supabase project's JWT secret. Used only by support emulation.
+ *
+ * Supabase dashboard → Project Settings → API → JWT Settings. It is what
+ * PostgREST verifies every access token against, so a token signed with it is
+ * accepted exactly as the customer's own would be — which is the whole reason
+ * lib/platform/emulation.ts can show a customer's screens without touching their
+ * account.
+ *
+ * Treat it as the most sensitive value in this file. It can mint a token for any
+ * user, so it belongs nowhere near a client component and nowhere near a log. It
+ * is deliberately `required` rather than defaulted: emulation reports itself
+ * unavailable when it is absent, which is far better than appearing to work.
+ */
+export const supabaseJwtSecret = () => required("SUPABASE_JWT_SECRET");
+
+/**
  * The credential the first-party app presents to the coverage service.
  *
  * Coverage is a separate bounded context reached over HTTP, so the agreements app
