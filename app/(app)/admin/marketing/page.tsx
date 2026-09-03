@@ -14,6 +14,12 @@ import {
   printWidth,
   type BrandAsset,
 } from "@/lib/marketing/brand-kit";
+import {
+  BANNER_KIT,
+  PRINT_NOTES,
+  describeBanner,
+  type BannerDesign,
+} from "@/lib/marketing/banner-kit";
 
 export const metadata: Metadata = { title: "Marketing" };
 export const dynamic = "force-dynamic";
@@ -49,10 +55,11 @@ export default async function MarketingPage() {
       <AdminNav role={staff.role} email={staff.email} />
 
       <PageIntro title="Marketing" defaultOpen>
-        The logo, in every format anybody has asked for. All of it is the same
-        drawing — the one in the masthead above — rendered out rather than
-        redrawn, so a shirt and a browser tab cannot end up disagreeing about
-        what the mark looks like.
+        The logo, in every format anybody has asked for, and the trade-show
+        banners ready to send to a printer. All of it is the same drawing — the
+        one in the masthead above — rendered out rather than redrawn, so a shirt,
+        a browser tab and a six-foot stand cannot end up disagreeing about what
+        the mark looks like. Every word on the banners is already on the site.
       </PageIntro>
 
       <div className="mt-10 space-y-8">
@@ -157,12 +164,37 @@ export default async function MarketingPage() {
           </ul>
         </Panel>
 
+        {BANNER_KIT.map((group) => (
+          <Panel key={group.heading} title={group.heading} description={group.blurb}>
+            <div className="space-y-8">
+              {group.designs.map((design) => (
+                <BannerBlock key={design.id} design={design} />
+              ))}
+            </div>
+          </Panel>
+        ))}
+
+        <Panel
+          title="What to tell the print shop"
+          description="Send them this list with the file. Two of these are things a supplier gets wrong without ever asking."
+        >
+          <dl className="space-y-4 text-sm">
+            {PRINT_NOTES.map((note) => (
+              <Guidance key={note.term} term={note.term}>
+                {note.detail}
+              </Guidance>
+            ))}
+          </dl>
+        </Panel>
+
         <Note>
-          Everything here is written by{" "}
+          The logo files are written by{" "}
           <code className="font-mono text-xs">scripts/make-brand-assets.mjs</code>{" "}
-          and committed. Re-run it if the mark or the name ever changes; nothing
-          in the build regenerates it, so what is on this page is exactly what was
-          last committed.
+          and the banners by{" "}
+          <code className="font-mono text-xs">scripts/make-banner-artwork.mjs</code>.
+          Both are committed and neither runs during a build, so what is on this
+          page is exactly what was last committed. Re-run them if the mark, the
+          name or the wording changes.
         </Note>
       </div>
     </Container>
@@ -174,6 +206,82 @@ function Guidance({ term, children }: { term: string; children: React.ReactNode 
     <div>
       <dt className="font-semibold text-ink">{term}</dt>
       <dd className="mt-1 leading-relaxed text-ink-soft">{children}</dd>
+    </div>
+  );
+}
+
+/**
+ * One banner design, with every size it has been cut at.
+ *
+ * The preview is the shipped PNG of the print file itself — the whole page,
+ * cassette allowance included — so what somebody approves here is what the shop
+ * receives. It is shown tall and narrow because that is what it is; cropping it
+ * to a comfortable card shape would hide the exact thing a person needs to
+ * check, which is where the words sit on a 6ft 8in stand.
+ */
+function BannerBlock({ design }: { design: BannerDesign }) {
+  const dark = design.plate === "dark";
+  return (
+    <div className="grid gap-5 sm:grid-cols-[minmax(0,9rem)_minmax(0,1fr)] sm:items-start">
+      <div
+        className={`overflow-hidden rounded-xl border ${
+          dark ? "border-ink bg-ink" : "border-line bg-surface"
+        }`}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element -- a static file in
+            public/, already small; the optimiser would only put a transform in
+            front of the CDN. */}
+        <img
+          src={`/marketing/${design.sizes[0].preview}`}
+          alt={`${design.title} — banner artwork`}
+          className="block w-full"
+        />
+      </div>
+
+      <div>
+        <p className="text-sm font-semibold text-ink">{design.title}</p>
+        <p className="mt-1 text-xs leading-relaxed text-ink-muted">
+          {design.description}
+        </p>
+
+        <ul className="mt-4 grid gap-2 sm:grid-cols-2">
+          {design.sizes.map((size) => (
+            <li key={size.file}>
+              <a
+                href={`/marketing/${size.file}`}
+                download
+                className="flex h-full flex-col rounded-xl border border-line bg-surface/50 px-4 py-3 transition-colors hover:border-ink/30 hover:bg-surface"
+              >
+                <span className="flex items-center gap-2 text-sm font-semibold text-ink">
+                  {size.label} · {size.visible}
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    aria-hidden="true"
+                    className="text-ink-muted"
+                  >
+                    <path
+                      d="M8 2v9m0 0l3.5-3.5M8 11L4.5 7.5M2.5 13.5h11"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </span>
+                <span className="mt-1 font-mono text-[11px] text-ink-muted">
+                  {describeBanner(size.file)}
+                </span>
+                <span className="mt-1.5 text-xs leading-relaxed text-ink-soft">
+                  {size.note}
+                </span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      </div>
     </div>
   );
 }
