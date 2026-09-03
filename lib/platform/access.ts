@@ -169,6 +169,11 @@ export async function logStaffAction(
       | "carrier_filing"
       | "carrier_credential"
       | "support_ticket"
+      // A message the email listener recorded. Its own subject type rather than
+      // being logged against the ticket it became, because "ignored" produces no
+      // ticket at all — and the decision to ignore a customer's mail is exactly
+      // the one worth being able to look up later.
+      | "support_inbound_email"
       | "platform_staff"
       // Support emulation. `subjectId` is the customer's user id, so the log
       // answers "who has been looked at, and by whom" from the same table as

@@ -28,6 +28,11 @@ export function Footer() {
             heading="Company"
             links={[
               { href: "/about", label: "About" },
+              // The account menu is the other way in, and it is the way most
+              // people will use — but it only exists behind a sign-in, and the
+              // single likeliest reason to want a help page is not being able to
+              // get behind one. So the public site links it too.
+              { href: "/help", label: "Help" },
               { href: PRIMARY_CTA.href, label: PRIMARY_CTA.label },
             ]}
           />

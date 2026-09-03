@@ -45,10 +45,21 @@ export type Ticket = {
   updated_at: string;
 };
 
+/**
+ * Who said it.
+ *
+ * 'public' is somebody who wrote in without an account — from the help page, or
+ * to a mailbox the listener watches. It is not a synonym for 'lender': the one
+ * question this field exists to answer is whether the person was a customer when
+ * they said it, and an anonymous sender recorded as a lender makes that
+ * unanswerable in a table nothing can update.
+ */
+export type AuthorKind = "partner" | "lender" | "public" | "staff" | "system";
+
 export type Message = {
   id: string;
   author_email: string;
-  author_kind: "partner" | "lender" | "staff" | "system";
+  author_kind: AuthorKind;
   body: string;
   internal: boolean;
   created_at: string;
@@ -70,7 +81,15 @@ export async function openTicket(
     subject: string;
     category: SupportCategory;
     body: string;
-    authorKind: "partner" | "lender";
+    authorKind: "partner" | "lender" | "public";
+    /**
+     * What is asked instead of a priority.
+     *
+     * An enhancement idea is not urgent and never becomes urgent, so the help
+     * page files one at 'low' and leaves the queue's ordering meaning what it
+     * says. Everything else takes the column default.
+     */
+    priority?: "low" | "normal" | "high" | "urgent";
   },
 ): Promise<Ticket> {
   const { data: ticket, error } = await db
@@ -82,6 +101,7 @@ export async function openTicket(
       opener_name: input.openerName ?? null,
       subject: input.subject,
       category: input.category,
+      ...(input.priority ? { priority: input.priority } : {}),
     })
     .select("*")
     .single();
@@ -106,8 +126,41 @@ export async function openTicket(
       "",
       `Your reference is ${ticket.reference}. Quote it if you write to us again about the same thing.`,
       "",
-      "You can follow it here:",
-      `${siteOrigin()}/partners/console/support`,
+      // A partner has a console with the thread in it. Somebody who wrote in
+      // from the help page has no account and possibly never will, and sending
+      // them to a screen they cannot open is worse than sending them nowhere.
+      // Reply-To on this message is support@, so the reply is the follow-up.
+      ...(input.partnerId
+        ? ["You can follow it here:", `${siteOrigin()}/partners/console/support`]
+        : ["Just reply to this email if there is more to say."]),
+    ],
+  });
+
+  // And the desk hears about it.
+  //
+  // WHY THIS IS UNCONDITIONAL. Until the email listener existed, a ticket raised
+  // in a console appeared on one screen that somebody had to remember to open. A
+  // queue nobody is told about is a queue that is read when it occurs to
+  // somebody, and the first anyone knew of a two-day-old question was the
+  // customer asking again. The console is still where the work is done; this is
+  // only the tap on the shoulder.
+  //
+  // It sends to supportEmail(), which is a mailbox the listener also watches — so
+  // in a wired deployment this arrives, is recognised by its reference, and is
+  // appended to the very thread it announces. That is why the listener matches on
+  // OUR references and ignores our own From address: see lib/support/inbound.ts.
+  await notify({
+    to: supportEmail(),
+    subject: `[${ticket.reference}] New: ${input.subject}`,
+    lines: [
+      `${input.openerName ?? input.openerEmail} raised a ${input.authorKind} ticket.`,
+      `Category: ${input.category}`,
+      `From: ${input.openerEmail}`,
+      "",
+      input.body,
+      "",
+      "———",
+      `${siteOrigin()}/admin/support/${ticket.id}`,
     ],
   });
 
@@ -152,7 +205,7 @@ export async function addMessage(
     ticketId: string;
     authorId: string | null;
     authorEmail: string;
-    authorKind: "partner" | "lender" | "staff" | "system";
+    authorKind: AuthorKind;
     body: string;
     internal?: boolean;
   },
@@ -181,7 +234,7 @@ export async function addMessage(
 
   const { data: ticket } = await db
     .from("support_tickets")
-    .select("id, reference, subject, opener_email, first_reply_at, status")
+    .select("id, reference, subject, opener_email, first_reply_at, status, partner_id")
     .eq("id", input.ticketId)
     .maybeSingle();
 
@@ -207,8 +260,9 @@ export async function addMessage(
         input.body,
         "",
         "———",
-        "Reply here, or from the console:",
-        `${siteOrigin()}/partners/console/support`,
+        ...(ticket.partner_id
+          ? ["Reply here, or from the console:", `${siteOrigin()}/partners/console/support`]
+          : ["Just reply to this email."]),
       ],
     });
   }

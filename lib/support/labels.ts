@@ -17,6 +17,9 @@ export const SUPPORT_CATEGORIES = [
   "claim",
   "account",
   "bug",
+  // An enhancement idea, not a problem. See migration 45 for why this is a
+  // category on a ticket rather than a table of its own.
+  "idea",
   "other",
 ] as const;
 
@@ -30,6 +33,7 @@ export const CATEGORY_LABELS: Record<SupportCategory, string> = {
   claim: "A claim",
   account: "Account access",
   bug: "Something is broken",
+  idea: "An idea to improve i-Waiver",
   other: "Something else",
 };
 
@@ -49,3 +53,27 @@ export const STATUS_LABELS: Record<SupportStatus, string> = {
 };
 
 export const PRIORITIES = ["low", "normal", "high", "urgent"] as const;
+
+/**
+ * What the help page offers somebody who needs help.
+ *
+ * A subset, and the reason it is a separate list rather than a filter over
+ * SUPPORT_CATEGORIES is that the full list is written for a partner engineer.
+ * "Integration" and "Sandbox" mean nothing to a lender who cannot get a signing
+ * link to send, and a dropdown whose first two options are unreadable teaches
+ * people to pick the last one — after which every ticket is 'other' and the
+ * category has stopped being information.
+ *
+ * 'idea' is deliberately NOT here. The help page asks what kind of thing this is
+ * before it asks anything else, and an idea is the other answer to that question;
+ * offering it a second time inside the help branch would let the two disagree.
+ */
+export const HELP_TOPICS: readonly SupportCategory[] = [
+  "account",
+  "bug",
+  "coverage_question",
+  "claim",
+  "billing",
+  "integration",
+  "other",
+];

@@ -137,6 +137,23 @@ export const partnerTeamEmail = () =>
 
 export const PARTNER_TEAM_NAME = "i-Waiver Partner Team";
 
+/**
+ * The shared secret an inbound-mail relay presents to the email listener.
+ *
+ * Mail arriving at support@ reaches the product through
+ * POST /api/webhooks/inbound-email, which is on the public internet and takes a
+ * stranger's words straight into a staff console. So the same rule as the Resend
+ * webhook applies, for a sharper reason: unset means every request is refused,
+ * never accepted unauthenticated. An open endpoint here would let anyone on the
+ * internet put a message into the support queue attributed to any address they
+ * chose — a support desk that can be forged is worse than one that is empty,
+ * because staff act on what it says.
+ *
+ * The listener reports itself as not wired while this is absent, which is the
+ * honest state and is what /admin/support/inbox says on its face.
+ */
+export const inboundEmailSecret = () => optional("INBOUND_EMAIL_SECRET");
+
 export const resendApiKey = () => optional("RESEND_API_KEY");
 
 /**

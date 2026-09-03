@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { Container } from "@/components/ui";
 import { Empty, Panel } from "@/components/app-ui";
 import { AdminNav } from "@/components/AdminNav";
+import { SupportNav } from "@/components/SupportNav";
 import { currentStaff } from "@/lib/platform/access";
 import { CATEGORY_LABELS, STATUS_LABELS } from "@/lib/support/tickets";
 
@@ -29,6 +30,13 @@ export default async function AdminSupportPage() {
     .order("created_at", { ascending: false })
     .limit(200);
 
+  // Only the count, so the listener tab can carry it. The messages themselves
+  // are read by /admin/support/inbox; this screen has no use for them.
+  const { count: untriaged } = await staff.db
+    .from("support_inbound_emails")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "new");
+
   const rows = tickets ?? [];
   const waiting = rows.filter((t) => t.status === "open" || t.status === "pending_us");
   const rest = rows.filter((t) => t.status !== "open" && t.status !== "pending_us");
@@ -37,9 +45,15 @@ export default async function AdminSupportPage() {
     <Container className="py-14 sm:py-20">
       <AdminNav role={staff.role} email={staff.email} />
 
-      <h1 className="font-serif text-3xl tracking-tight sm:text-4xl">Support</h1>
+      <h1 className="font-serif text-3xl tracking-tight sm:text-4xl">
+        Customer Support
+      </h1>
 
-      <div className="mt-10 space-y-8">
+      <div className="mt-8">
+        <SupportNav untriaged={untriaged ?? 0} />
+      </div>
+
+      <div className="space-y-8">
         <Panel title="Waiting on us" description="Oldest first.">
           {waiting.length === 0 ? <Empty>Inbox clear.</Empty> : <List rows={waiting} />}
         </Panel>

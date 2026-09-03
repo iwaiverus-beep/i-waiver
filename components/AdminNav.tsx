@@ -46,7 +46,11 @@ const LINKS: { href: string; label: string; needs?: StaffCapability }[] = [
   // the companies we work with. Deliberately not merged with those two — see the
   // header of lib/platform/contacts.ts.
   { href: "/admin/contacts", label: "Contacts", needs: "reports.read" },
-  { href: "/admin/support", label: "Support" },
+  // "Customer Support" rather than "Support", because the tab now covers two
+  // screens — the tickets and the mailbox they arrive from — and because
+  // "Support" is also the name of a staff role shown in this same bar. One word
+  // meaning both a section and a permission is one word too few.
+  { href: "/admin/support", label: "Customer Support" },
   // The brand kit. Last but one, beside Staff, because it is a cupboard rather
   // than a queue — nobody opens it as part of a day's work, they open it when
   // somebody outside asks for the logo.

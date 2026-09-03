@@ -39,7 +39,7 @@ export default async function AdminTicketPage({
       <AdminNav role={staff.role} email={staff.email} />
 
       <Link href="/admin/support" className="text-xs text-ink-muted hover:text-ink">
-        ← Support
+        ← Customer Support
       </Link>
 
       <h1 className="mt-4 font-serif text-3xl tracking-tight sm:text-4xl">

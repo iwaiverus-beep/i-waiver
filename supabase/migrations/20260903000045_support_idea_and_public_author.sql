@@ -1,0 +1,41 @@
+-- Two values on two existing enums, so the help page and the email listener can
+-- describe what they actually carry.
+--
+-- ITS OWN MIGRATION, deliberately, and nothing else belongs in this file. Postgres
+-- will add a value to an enum inside a transaction but will not let the same
+-- transaction USE it, and scripts/db-push.mjs sends each file as one query. So a
+-- file that adds 'idea' and then inserts a row categorised 'idea' fails, and it
+-- fails at the second statement having already committed nothing — which is the
+-- worst shape of migration failure to diagnose. Keeping the type changes alone
+-- makes that impossible rather than merely unlikely.
+
+-- ---------------------------------------------------------------------------
+-- 1. 'idea' — a request that is not a problem
+-- ---------------------------------------------------------------------------
+--
+-- Every existing category names something that is wrong or unclear: an
+-- integration that will not connect, a bill that looks off, a question about
+-- cover. An enhancement idea is none of those. It has no customer waiting on an
+-- answer, it does not age into a breach of anything, and filing it as 'other'
+-- buries it in the same bucket as the mail nobody could classify.
+--
+-- So it is a category rather than a separate table. A ticket is still the right
+-- container — somebody wrote in, somebody should reply, and the thread is the
+-- record of what was said — and the support queue already knows how to hold one.
+-- What changes is that the queue can now be read without ideas in the way of the
+-- work, which is the only reason this value exists.
+alter type support_category add value if not exists 'idea';
+
+-- ---------------------------------------------------------------------------
+-- 2. 'public' — somebody who is not a customer yet, or at all
+-- ---------------------------------------------------------------------------
+--
+-- The kinds were 'partner', 'lender', 'staff' and 'system', which assumed every
+-- message came from an account. The help page does not: it is readable and usable
+-- without signing in, and so is a mailbox — the whole point of an email listener
+-- is that anyone can write to it.
+--
+-- Recording those as 'lender' would be a small, permanent lie in an append-only
+-- table, and the one question the field exists to answer — was this person a
+-- customer when they said it — would be unanswerable afterwards.
+alter type support_author_kind add value if not exists 'public';

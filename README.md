@@ -52,6 +52,7 @@ Optional, for the partner and admin consoles:
 | `IWAIVER_BOOTSTRAP_ADMINS` | Comma-separated addresses that become super admins on first sign-in. The only way into an empty `/admin`. Clear it once real staff rows exist — an address left here cannot be revoked from inside the product. |
 | `PARTNER_NOTIFICATIONS_EMAIL` | Where a new partner application is announced. Without it the application is still saved, and a warning says nobody was told. |
 | `SUPPORT_EMAIL` | The address customers are pointed at. Defaults to `support@` the brand domain. |
+| `INBOUND_EMAIL_SECRET` | Shared secret for the email listener at `POST /api/webhooks/inbound-email`. Unset means the endpoint refuses everything and `/admin/support/inbox` says the listener is not wired. Point a relay in front of the support mailbox at that URL with the secret in an `X-Inbound-Secret` header. |
 | `PARTNER_TEAM_EMAIL` | Where a partner or carrier is pointed, and where their replies land. Their questions are about contracts, filings and integrations, which a support queue cannot answer. Defaults to `partners@` the brand domain. |
 
 Grant yourself admin access the first time:

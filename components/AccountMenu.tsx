@@ -34,16 +34,28 @@ type Me = {
 /** Fired by the account screen when a name or picture changes, so this restacks without a reload. */
 export const PROFILE_UPDATED_EVENT = "iwaiver:profile-updated";
 
-const LINKS = [
-  // `?as=lender` matters only for staff, whom /dashboard otherwise redirects into
-  // the console. It is harmless for everybody else, and carrying it
-  // unconditionally beats two versions of the same list that could drift apart.
-  { href: "/dashboard?as=lender", label: "Your agreements" },
+/**
+ * WHAT IS AND IS NOT IN HERE.
+ *
+ * "Your agreements" used to sit at the top and no longer does. This corner is
+ * about the account — who you are, how you sign in, where money lands. The list
+ * of agreements is the product itself, it is the first tab of AppNav on every
+ * screen behind a sign-in, and a second route to it from a menu headed by your
+ * own face made the menu read as a site map rather than as an account.
+ *
+ * `indent` marks the four settings that are sections OF the profile screen
+ * rather than destinations beside it — every one of them is an anchor into
+ * /account. The indent is what says so, and it is what lets Help sit flush in the
+ * same list without being read as a fifth profile setting: it is a page of its
+ * own, and the only item here that is not about this account.
+ */
+const LINKS: { href: string; label: string; indent?: boolean }[] = [
   { href: "/account", label: "Your profile" },
-  { href: "/account#email", label: "Email address" },
-  { href: "/account#password", label: "Password" },
-  { href: "/account#passkeys", label: "Face ID and passkeys" },
-  { href: "/account#paid", label: "Getting paid" },
+  { href: "/account#email", label: "Email address", indent: true },
+  { href: "/account#password", label: "Password", indent: true },
+  { href: "/account#passkeys", label: "Face ID and passkeys", indent: true },
+  { href: "/account#paid", label: "Getting paid", indent: true },
+  { href: "/help", label: "Help" },
 ];
 
 export function AccountMenu() {
@@ -271,7 +283,9 @@ export function AccountMenu() {
                 href={link.href}
                 role="menuitem"
                 onClick={() => setOpen(false)}
-                className="block px-4 py-2 text-sm text-ink-soft transition-colors hover:bg-surface hover:text-ink"
+                className={`block py-2 pr-4 text-sm text-ink-soft transition-colors hover:bg-surface hover:text-ink ${
+                  link.indent ? "pl-9" : "pl-4"
+                }`}
               >
                 {link.label}
               </Link>

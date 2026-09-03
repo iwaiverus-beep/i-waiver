@@ -46,7 +46,9 @@ export default async function DashboardPage({
   //
   // `?as=lender` is the way back. A staff member may also lend their own things,
   // and a redirect with no exit would make their own agreements unreachable —
-  // the account menu links here with that parameter for exactly this reason.
+  // AppNav's Agreements tab carries that parameter for exactly this reason, as
+  // does its Home tab. (It used to be the account menu's job too; that menu is
+  // about the account now and no longer lists the agreements.)
   if (resolved.as !== "lender") {
     // `staffFor` rather than `currentStaff`, because the session is already
     // resolved three lines up and re-resolving it is a wasted round trip.
