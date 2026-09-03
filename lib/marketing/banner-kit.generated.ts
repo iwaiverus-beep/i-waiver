@@ -34,4 +34,10 @@ export const BANNER_FILES: Record<string, BannerFileFacts> = {
   "banner-backdrop-2-33-5x80.png": { bytes: 17209, widthIn: 33.5, heightIn: 84, visibleIn: 80 },
   "banner-backdrop-3-33-5x80.pdf": { bytes: 68870, widthIn: 33.5, heightIn: 84, visibleIn: 80 },
   "banner-backdrop-3-33-5x80.png": { bytes: 16320, widthIn: 33.5, heightIn: 84, visibleIn: 80 },
+  "banner-draft-loaner-protection-33-5x80.pdf": { bytes: 93287, widthIn: 33.5, heightIn: 84, visibleIn: 80 },
+  "banner-draft-loaner-protection-33-5x80.png": { bytes: 21448, widthIn: 33.5, heightIn: 84, visibleIn: 80 },
+  "banner-draft-cover-your-loaner-33-5x80.pdf": { bytes: 92881, widthIn: 33.5, heightIn: 84, visibleIn: 80 },
+  "banner-draft-cover-your-loaner-33-5x80.png": { bytes: 21751, widthIn: 33.5, heightIn: 84, visibleIn: 80 },
+  "banner-draft-protect-your-loaner-33-5x80.pdf": { bytes: 93759, widthIn: 33.5, heightIn: 84, visibleIn: 80 },
+  "banner-draft-protect-your-loaner-33-5x80.png": { bytes: 21783, widthIn: 33.5, heightIn: 84, visibleIn: 80 },
 };

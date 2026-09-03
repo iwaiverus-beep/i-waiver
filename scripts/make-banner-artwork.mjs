@@ -181,6 +181,79 @@ const DESIGNS = {
   },
 
   /**
+   * THREE NAMES ON TRIAL, NOT THREE BANNERS TO ORDER.
+   *
+   * "Loaner Protection" is a candidate for what the service is called, and it is
+   * not decided. These exist so it can be read at the size it would actually be
+   * read at — a phrase can look fine in a document and turn out to be the wrong
+   * shape once it is two feet tall — and the three of them are identical apart
+   * from the words, because the words are the only thing being compared.
+   *
+   * Every one of them carries "where it is available" on the cover line, in the
+   * same size of type as everything else. That is not a hedge, it is the
+   * difference between naming a programme and claiming a policy exists, and it
+   * matters most on the two headlines that read as a promise on their own —
+   * "Cover your loaner" and "Protect your loaner" both sound like insurance to
+   * somebody who reads nothing else, which is most people walking past a stand.
+   *
+   * The `draft-` in each id reaches the filename, and the console lists them
+   * under their own heading. Both are deliberate: the way a trial banner gets
+   * printed by mistake is by sitting in a folder next to an approved one with a
+   * name that does not say which is which.
+   */
+  "draft-loaner-protection": {
+    title: "Loaner Protection",
+    tone: "light",
+    eyebrow: "From I-Waiver",
+    headline: ["Loaner"],
+    headlineAccent: ["Protection."],
+    body:
+      "A signed agreement, a record that holds up, and cover for the loan period where it is available.",
+    points: [
+      "They sign from a link. No account, no app, nothing to download.",
+      "Written for the state the loan happens in, and producible years later.",
+      "Cover for the loan period, where it is available.",
+    ],
+    // A name is the whole message, so it is set larger than a sentence would be.
+    hero: true,
+    draft: true,
+  },
+  "draft-cover-your-loaner": {
+    title: "Cover your loaner",
+    tone: "light",
+    eyebrow: "From I-Waiver",
+    headline: ["Cover"],
+    headlineAccent: ["your loaner."],
+    body:
+      "A signed agreement, a record that holds up, and cover for the loan period where it is available.",
+    points: [
+      "They sign from a link. No account, no app, nothing to download.",
+      "Written for the state the loan happens in, and producible years later.",
+      "Cover for the loan period, where it is available.",
+    ],
+    // A name is the whole message, so it is set larger than a sentence would be.
+    hero: true,
+    draft: true,
+  },
+  "draft-protect-your-loaner": {
+    title: "Protect your loaner",
+    tone: "light",
+    eyebrow: "From I-Waiver",
+    headline: ["Protect"],
+    headlineAccent: ["your loaner."],
+    body:
+      "A signed agreement, a record that holds up, and cover for the loan period where it is available.",
+    points: [
+      "They sign from a link. No account, no app, nothing to download.",
+      "Written for the state the loan happens in, and producible years later.",
+      "Cover for the loan period, where it is available.",
+    ],
+    // A name is the whole message, so it is set larger than a sentence would be.
+    hero: true,
+    draft: true,
+  },
+
+  /**
    * Three standard stands in a row.
    *
    * 33.5in each, so three of them fill 100.5in of a 10ft booth back wall with a
@@ -240,6 +313,11 @@ const SHEET = [
   ["backdrop-1", "standard"],
   ["backdrop-2", "standard"],
   ["backdrop-3", "standard"],
+  // On trial. One size each — the comparison is between three phrases, not
+  // between fifteen files.
+  ["draft-loaner-protection", "standard"],
+  ["draft-cover-your-loaner", "standard"],
+  ["draft-protect-your-loaner", "standard"],
 ];
 
 // --- drawing ---------------------------------------------------------------

@@ -167,6 +167,9 @@ export default async function MarketingPage() {
         {BANNER_KIT.map((group) => (
           <Panel key={group.heading} title={group.heading} description={group.blurb}>
             <div className="space-y-8">
+              {/* Above the artwork, not below it. A warning under a row of
+                  download links is a warning read after the download. */}
+              {group.warn && <Note tone="warn">{group.warn}</Note>}
               {group.designs.map((design) => (
                 <BannerBlock key={design.id} design={design} />
               ))}

@@ -40,6 +40,8 @@ export type BannerDesign = {
 export type BannerGroup = {
   heading: string;
   blurb: string;
+  /** Shown as a warning above the group. Present only on artwork nobody may order. */
+  warn?: string;
   designs: BannerDesign[];
 };
 
@@ -185,6 +187,66 @@ export const BANNER_KIT: BannerGroup[] = [
             note: "Right of three.",
             file: "banner-backdrop-3-33-5x80.pdf",
             preview: "banner-backdrop-3-33-5x80.png",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    heading: "Naming drafts — not approved",
+    blurb:
+      "Three candidate names for the service, set at the size they would actually be read at. Identical apart from the words, because the words are the only thing being compared. One standard stand each; whichever wins gets cut at every size afterwards.",
+    warn:
+      "Do not send these to a printer. The name is undecided, and two of the three read as an insurance promise to somebody who reads nothing else on the stand — which is most people walking past one. Every file carries “where it is available” on the cover line for exactly that reason, and that qualifier does not come off.",
+    designs: [
+      {
+        id: "draft-loaner-protection",
+        title: "“Loaner Protection”",
+        description:
+          "The name as the whole message, with the definition directly under it. The safest of the three: it reads as the name of a programme rather than a promise, which is the same ground “Buyer Protection” stands on.",
+        plate: "light",
+        sizes: [
+          {
+            label: "Standard",
+            visible: "33.5 × 80 in",
+            page: "33.5 × 84 in",
+            note: "For comparison. Not approved for print.",
+            file: "banner-draft-loaner-protection-33-5x80.pdf",
+            preview: "banner-draft-loaner-protection-33-5x80.png",
+          },
+        ],
+      },
+      {
+        id: "draft-cover-your-loaner",
+        title: "“Cover your loaner”",
+        description:
+          "An instruction rather than a name. It is the most direct of the three and the most exposed: “cover” is the word an insurer uses, and this is the version most likely to need a carrier's sign-off before it goes anywhere.",
+        plate: "light",
+        sizes: [
+          {
+            label: "Standard",
+            visible: "33.5 × 80 in",
+            page: "33.5 × 84 in",
+            note: "For comparison. Not approved for print.",
+            file: "banner-draft-cover-your-loaner-33-5x80.pdf",
+            preview: "banner-draft-cover-your-loaner-33-5x80.png",
+          },
+        ],
+      },
+      {
+        id: "draft-protect-your-loaner",
+        title: "“Protect your loaner”",
+        description:
+          "The same shape with a softer verb. “Protect” covers the agreement and the record as well as the cover, so it is defensible in a state where no cover is written yet — but it is a sentence, not a name, and a sentence cannot be trademarked or reused as a product tier.",
+        plate: "light",
+        sizes: [
+          {
+            label: "Standard",
+            visible: "33.5 × 80 in",
+            page: "33.5 × 84 in",
+            note: "For comparison. Not approved for print.",
+            file: "banner-draft-protect-your-loaner-33-5x80.pdf",
+            preview: "banner-draft-protect-your-loaner-33-5x80.png",
           },
         ],
       },
