@@ -19,7 +19,7 @@ export const dynamic = "force-dynamic";
 export default async function AssetsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ as?: string }>;
+  searchParams: Promise<{ as?: string; edit?: string }>;
 }) {
   const supabase = await userClient();
   const {
@@ -33,7 +33,7 @@ export default async function AssetsPage({
   // one too - otherwise somebody who works here signs in and lands on their
   // own, probably empty, list of things to lend. The `as=lender` parameter is
   // the way back, exactly as it is there.
-  const { as } = await searchParams;
+  const { as, edit } = await searchParams;
   if (as !== "lender" && (await staffFor(user))) redirect("/admin");
 
   // The lender's own offers ride along, so the "suggest with…" picker opens
@@ -85,10 +85,22 @@ export default async function AssetsPage({
         </div>
       )}
 
+      {/*
+        `?edit=<id>` opens that item straight into its record, and is how the
+        cards on /home get here — the list is the only place the editor exists,
+        so linking to the item means linking to the list with the item open.
+        A second screen showing one item would be a second copy of this form.
+
+        Not validated here. An id that is not on this list simply opens nothing,
+        because the manager only matches it against rows the query already
+        returned — and that query is the lender's own, under RLS. A guessed id
+        therefore reveals nothing, which is the check that matters.
+      */}
       <AssetsManager
         initial={assets}
         initialOffers={offers}
         orgOriginatorIds={orgOriginatorIds}
+        initialEditingId={edit ?? null}
       />
     </Container>
   );

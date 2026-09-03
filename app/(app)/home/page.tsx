@@ -170,10 +170,23 @@ export default async function HomePage({
               {assets.map((asset) => {
                 const lead = orderedPhotos(asset.asset_photos)[0];
                 const rate = formatRate(asset.rate_cents, asset.rate_unit);
+                /*
+                  The card opens the item; the button lends it. Two things to do
+                  with one row, so the smaller and more frequent one keeps the
+                  button and everything else becomes the way in to the record —
+                  which is where a photograph, a rate or a typo gets fixed.
+
+                  Done as a stretched link rather than by wrapping the row:
+                  `Lend` is itself a link, and nesting one inside another is
+                  invalid HTML that browsers resolve however they like. So the
+                  title carries the real link and its ::after covers the card,
+                  which also means the accessible name is the item's name rather
+                  than the whole row read aloud.
+                */
                 return (
                   <li
                     key={asset.id}
-                    className="flex items-center justify-between gap-4 rounded-2xl border border-line bg-paper px-5 py-4"
+                    className="relative flex items-center justify-between gap-4 rounded-2xl border border-line bg-paper px-5 py-4 transition-colors hover:border-ink/25 focus-within:border-ink/25"
                   >
                     <div className="flex min-w-0 items-center gap-4">
                       {lead ? (
@@ -187,18 +200,27 @@ export default async function HomePage({
                         <div className="h-12 w-12 shrink-0 rounded-xl border border-dashed border-line" />
                       )}
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-ink">
+                        {/*
+                          `block`, because this replaced a <p>: `truncate` is
+                          overflow-hidden, which an inline element ignores, and a
+                          long name would then run under the Lend button.
+                        */}
+                        <Link
+                          href={`/assets?edit=${asset.id}`}
+                          className="block truncate text-sm font-semibold text-ink outline-none after:absolute after:inset-0 after:rounded-2xl focus-visible:underline"
+                        >
                           {assetTitle(asset)}
-                        </p>
+                        </Link>
                         <p className="truncate text-sm text-ink-soft">
                           {asset.description}
                           {rate ? ` · ${rate}` : ""}
                         </p>
                       </div>
                     </div>
+                    {/* `relative` lifts it out from under the stretched link. */}
                     <Link
                       href={`/agreements/new?asset=${asset.id}`}
-                      className="shrink-0 rounded-full bg-accent px-4 py-2 text-xs font-semibold text-paper transition-colors hover:bg-accent-hover"
+                      className="relative shrink-0 rounded-full bg-accent px-4 py-2 text-xs font-semibold text-paper transition-colors hover:bg-accent-hover"
                     >
                       Lend
                     </Link>

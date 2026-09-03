@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { formatCents } from "@/lib/format";
 import {
   allowedRateUnits,
@@ -99,11 +99,17 @@ export function AssetsManager({
   initial,
   initialOffers = [],
   orgOriginatorIds = [],
+  initialEditingId = null,
 }: {
   initial: Asset[];
   initialOffers?: AssetOfferRow[];
   /** This lender's business originators. An item owned by one may be priced per period. */
   orgOriginatorIds?: string[];
+  /**
+   * Open this item's record on arrival — `/assets?edit=<id>`, which is how a
+   * card on /home leads here. Ignored when it names nothing on the list.
+   */
+  initialEditingId?: string | null;
 }) {
   // Per item, because a person can own things under both kinds of originator.
   // A new item is always individual-owned — `POST /api/assets` files it under
@@ -115,9 +121,40 @@ export function AssetsManager({
 
   const [assets, setAssets] = useState(initial);
   const [offers, setOffers] = useState(initialOffers);
-  const [adding, setAdding] = useState(initial.length === 0);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  // An id that arrived in the URL only counts if it is actually on the list.
+  // Trusting it blindly would open an editor bound to no row: every field blank,
+  // and Save writing to an item this lender may not own.
+  const arriving =
+    initialEditingId && initial.some((asset) => asset.id === initialEditingId)
+      ? initialEditingId
+      : null;
+
+  // The add form opens on an empty list — but never over an item somebody asked
+  // for by name, and an empty list cannot have produced a link anyway.
+  const [adding, setAdding] = useState(initial.length === 0 && !arriving);
+  const [editingId, setEditingId] = useState<string | null>(arriving);
   const [query, setQuery] = useState("");
+
+  // Arriving from a card on /home, two things have to happen once.
+  const settled = useRef(false);
+  useEffect(() => {
+    if (!arriving || settled.current) return;
+    settled.current = true;
+
+    // Take `edit` out of the address bar, and ONLY `edit`. Replacing the whole
+    // query string would drop `as=lender` along with it, and a staff member who
+    // then reloaded would be redirected straight back into the console — the
+    // guard at the top of the page sends anybody without that parameter there.
+    const url = new URL(window.location.href);
+    url.searchParams.delete("edit");
+    window.history.replaceState(null, "", url.pathname + url.search);
+
+    // The record can open well below the fold on a long list, and a page that
+    // silently scrolled nowhere looks like a link that did nothing.
+    document
+      .getElementById(`asset-${arriving}`)
+      ?.scrollIntoView({ block: "start" });
+  }, [arriving]);
 
   // A filter box on four rows is clutter. On thirty it is the only way to find
   // the trailer.
@@ -175,7 +212,13 @@ export function AssetsManager({
       <div className="space-y-3">
         {visible.map((asset) =>
           editingId === asset.id ? (
-            <div key={asset.id} className="space-y-3">
+            // `scroll-mt-24` because the header is sticky: without it, scrolling
+            // to this parks its heading underneath the header.
+            <div
+              key={asset.id}
+              id={`asset-${asset.id}`}
+              className="scroll-mt-24 space-y-3"
+            >
               <AssetForm
                 asset={asset}
                 heading={`Edit ${title(asset)}`}
