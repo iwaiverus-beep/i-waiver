@@ -47,10 +47,17 @@ function searchTokens(query: string): string[] {
     .slice(0, 6);
 }
 
-/** One page of the list. `db` must be the user client — see the note above. */
+/**
+ * One page of the list. `db` must be the user client — see the note above.
+ *
+ * `limit` is the page size, and the home screen is the only caller that changes
+ * it: it shows the five most recent and says how many more there are, which is
+ * the same query with a shorter `range`.
+ */
 export async function fetchAgreementPage(
   db: SupabaseClient,
   params: ListParams,
+  limit: number = PAGE_SIZE,
 ): Promise<AgreementPage> {
   let query = db.from("agreement_list").select(COLUMNS, { count: "exact" });
 
@@ -73,7 +80,7 @@ export async function fetchAgreementPage(
     // second. Without a second key those rows swap places between requests, and
     // the same agreement turns up on two pages while another turns up on none.
     .order("id", { ascending: true })
-    .range(params.offset, params.offset + PAGE_SIZE - 1);
+    .range(params.offset, params.offset + limit - 1);
 
   if (error) throw new Error(`Could not read the agreement list: ${error.message}`);
 
@@ -82,6 +89,50 @@ export async function fetchAgreementPage(
   const nextOffset = params.offset + rows.length;
 
   return { rows, total, hasMore: nextOffset < total, nextOffset };
+}
+
+/**
+ * The agreements this reader is personally holding up.
+ *
+ * A separate read rather than a filter over the page above, because the two ask
+ * different questions. The list is "what has happened lately"; this is "what is
+ * stuck on me", and an agreement sent three weeks ago and never signed is the
+ * likeliest thing in the product to be both forgotten and blocking. Filtering
+ * the recent five would have quietly hidden exactly that one.
+ *
+ * Matched on the signed-in address against the signer rows, not on being the
+ * lender: what makes it urgent is that the signature nobody else can supply is
+ * missing, and the row that says so is the signer's own.
+ *
+ * Capped, because it feeds a dialog. Somebody with more than a dozen unsigned
+ * agreements has a housekeeping problem the home screen cannot solve in a modal,
+ * and the dashboard counts them all.
+ */
+export async function fetchAwaitingMySignature(
+  db: SupabaseClient,
+  viewerEmail: string | null,
+  limit = 12,
+): Promise<AgreementListRow[]> {
+  if (!viewerEmail) return [];
+  const mine = viewerEmail.toLowerCase();
+
+  const { data, error } = await db
+    .from("agreement_list")
+    .select(COLUMNS)
+    .is("archived_at", null)
+    .in("status", ["sent", "partially_signed"])
+    .order("last_activity_at", { ascending: false })
+    .limit(limit);
+
+  // Silence rather than a broken home screen: this is a nudge on top of a page
+  // that is complete without it.
+  if (error) return [];
+
+  return ((data ?? []) as unknown as AgreementListRow[]).filter((row) =>
+    (row.signers ?? []).some(
+      (signer) => !signer.signed_at && signer.email?.toLowerCase() === mine,
+    ),
+  );
 }
 
 export type ListSummary = {

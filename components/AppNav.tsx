@@ -31,13 +31,18 @@ import { usePathname } from "next/navigation";
 export const LEND_ACTION = { href: "/agreements/new", label: "Lend something" };
 
 export const LENDER_LINKS = [
-  // `?as=lender` is what tells /dashboard not to bounce a staff member into the
-  // console. Without it, somebody who works here and also lends their own things
-  // could reach the other two tabs and never get back to the first.
+  // `?as=lender` is what tells /home and /dashboard not to bounce a staff member
+  // into the console. Without it, somebody who works here and also lends their
+  // own things could reach the other tabs and never get back to the first two.
   //
   // Carried for everyone rather than only for staff: this component does not know
   // who is reading it, the parameter does nothing for anybody else, and a nav with
   // two versions of the same link is a nav that will disagree with itself.
+  //
+  // Home is a tab and not only the mark in the corner, because on a phone the
+  // mark opens this menu instead of navigating — without a row for it, the hub
+  // would be the one screen the menu could not reach.
+  { href: "/home?as=lender", label: "Home" },
   { href: "/dashboard?as=lender", label: "Agreements" },
   { href: "/assets", label: "Things you lend" },
   { href: "/contacts", label: "People" },

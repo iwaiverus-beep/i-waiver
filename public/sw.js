@@ -61,6 +61,7 @@ function isPrivate(url) {
     url.pathname.startsWith("/api/") ||
     url.pathname.startsWith("/sign/") ||
     url.pathname.startsWith("/auth/") ||
+    url.pathname.startsWith("/home") ||
     url.pathname.startsWith("/dashboard") ||
     url.pathname.startsWith("/agreements") ||
     url.pathname.startsWith("/contacts") ||

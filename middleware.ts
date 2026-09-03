@@ -45,6 +45,7 @@ export async function middleware(request: NextRequest) {
 
   const path = request.nextUrl.pathname;
   const isLenderArea =
+    path.startsWith("/home") ||
     path.startsWith("/dashboard") ||
     path.startsWith("/agreements") ||
     path.startsWith("/groups") ||
@@ -75,13 +76,13 @@ export async function middleware(request: NextRequest) {
     // lender dashboard, which is not theirs and does not explain itself. Only
     // relative paths, so a crafted value cannot bounce a live session off-site.
     //
-    // /assets, the same place the login page and the OAuth callback default to.
+    // /home, the same place the login page and the OAuth callback default to.
     // This is the fourth door into the product and the three of them have to
     // agree, or where you end up depends on which one you happened to use.
     const next = request.nextUrl.searchParams.get("next");
     const destination = request.nextUrl.clone();
     destination.pathname =
-      next && next.startsWith("/") && !next.startsWith("//") ? next : "/assets";
+      next && next.startsWith("/") && !next.startsWith("//") ? next : "/home";
     destination.search = "";
     return redirectKeepingCookies(destination, response);
   }
@@ -121,6 +122,7 @@ function redirectKeepingCookies(
 
 export const config = {
   matcher: [
+    "/home/:path*",
     "/dashboard/:path*",
     "/agreements/:path*",
     "/groups/:path*",

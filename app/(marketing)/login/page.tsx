@@ -18,12 +18,11 @@ export default async function LoginPage({
   // Only relative paths, so a crafted ?next= cannot bounce someone off-site
   // carrying a fresh session.
   //
-  // /assets rather than /dashboard: signing in is nearly always the start of
-  // lending something, and the list of things you lend is the screen that leads
-  // to it. Staff are still sent to the console — /assets carries the same
-  // redirect /dashboard does, for the reason written there.
+  // /home: the hub, which opens on the top of each of the three lists and the
+  // button that starts a loan. Staff are still sent to the console — /home
+  // carries the same redirect /dashboard does, for the reason written there.
   const destination =
-    next && next.startsWith("/") && !next.startsWith("//") ? next : "/assets";
+    next && next.startsWith("/") && !next.startsWith("//") ? next : "/home";
 
   // One sign-in for everybody — a lender, somebody at a partner, and our own
   // staff all authenticate the same way, and what they are is a row in the

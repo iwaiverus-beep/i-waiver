@@ -78,6 +78,6 @@ function homeFor(pathname: string): string {
   if (pathname.startsWith("/partners/console")) return "/partners/console";
   // `?as=lender` for the same reason AppNav carries it: a staff member standing
   // on a lender screen who clicks the mark means "back to the lender home", and
-  // a bare /dashboard would answer that by throwing them into the console.
-  return "/dashboard?as=lender";
+  // a bare /home would answer that by throwing them into the console.
+  return "/home?as=lender";
 }
