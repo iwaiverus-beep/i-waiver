@@ -46,6 +46,16 @@ export type StaffCapability =
    * of the first. `read_only` therefore does not have it.
    */
   | "reports.read"
+  /**
+   * Open the brand kit and download the logo.
+   *
+   * Its own capability rather than a bare `role === "super_admin"`, because the
+   * question "who may hand out our logo" is one somebody will want to answer
+   * differently later — the moment there is a marketing hire, this moves onto
+   * `admin` and that is the whole change. Narrow to start with: artwork that
+   * leaves the building is hard to call back.
+   */
+  | "marketing.read"
   /** Read and reply to support tickets. */
   | "support.respond"
   /** Assign, prioritise and close tickets. */
@@ -69,6 +79,7 @@ const CAPABILITIES: Record<StaffRole, StaffCapability[]> = {
     "carriers.filings",
     "sandbox.purge",
     "reports.read",
+    "marketing.read",
     "support.respond",
     "support.triage",
     "compliance.states",

@@ -47,6 +47,10 @@ const LINKS: { href: string; label: string; needs?: StaffCapability }[] = [
   // header of lib/platform/contacts.ts.
   { href: "/admin/contacts", label: "Contacts", needs: "reports.read" },
   { href: "/admin/support", label: "Support" },
+  // The brand kit. Last but one, beside Staff, because it is a cupboard rather
+  // than a queue — nobody opens it as part of a day's work, they open it when
+  // somebody outside asks for the logo.
+  { href: "/admin/marketing", label: "Marketing", needs: "marketing.read" },
   { href: "/admin/staff", label: "Staff" },
 ];
 
