@@ -13,9 +13,13 @@ import { LEND_ACTION, LENDER_LINKS, navActive } from "./AppNav";
  * WHY THE LOGO AND NOT A HAMBURGER. There is exactly one thing in this corner
  * and it is already the way home, so putting a second control beside it would
  * mean two targets a thumb-width apart that both mean "go somewhere". The mark
- * keeps its job — it is still the way back to your agreements — and gains the
- * three other places plus the action, which is what the row across the top used
- * to hold before four pills started wrapping onto two lines on a narrow screen.
+ * gains the four places and the action, which is what the row across the top
+ * used to hold before those pills started wrapping onto two lines on a narrow
+ * screen. Home leads the menu because the mark itself no longer navigates here.
+ *
+ * The order is the home screen's, top to bottom: Home, the things you lend, the
+ * agreements, the people, and lending something at the end. One sequence for
+ * the product, whether you are scrolling it or jumping through it.
  *
  * Phones only. From `sm` the row in `AppNav` is back and this is a plain link
  * again, because a menu hiding four things that already fit is a tap in the way.
@@ -94,19 +98,6 @@ export function AppNavMenu({ home }: { home: string }) {
           aria-label={BRAND.name}
           className="absolute left-0 top-full z-50 mt-2 w-64 overflow-hidden rounded-2xl border border-line bg-paper shadow-lg shadow-ink/5 sm:hidden"
         >
-          {/*
-            The action first and above a rule, wearing the accent it wears in the
-            row it came from. It is not one of the places you can go; it is the
-            thing the places are for.
-          */}
-          <Link
-            href={LEND_ACTION.href}
-            role="menuitem"
-            className="block border-b border-line bg-accent px-4 py-3.5 text-sm font-semibold text-paper"
-          >
-            {LEND_ACTION.label}
-          </Link>
-
           {LENDER_LINKS.map((link) => {
             const active = navActive(pathname, link.href);
             return (
@@ -123,6 +114,21 @@ export function AppNavMenu({ home }: { home: string }) {
               </Link>
             );
           })}
+
+          {/*
+            The action last and below a rule, wearing the accent it wears
+            everywhere else. It is not one of the places you can go; it is the
+            thing the places are for — and it sits at the end for the same
+            reason it ends the home screen, after a reader has been reminded
+            what they own and who they lend it to.
+          */}
+          <Link
+            href={LEND_ACTION.href}
+            role="menuitem"
+            className="block border-t border-line bg-accent px-4 py-3.5 text-sm font-semibold text-paper"
+          >
+            {LEND_ACTION.label}
+          </Link>
         </div>
       )}
     </div>

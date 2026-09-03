@@ -42,9 +42,14 @@ export const LENDER_LINKS = [
   // Home is a tab and not only the mark in the corner, because on a phone the
   // mark opens this menu instead of navigating — without a row for it, the hub
   // would be the one screen the menu could not reach.
+  //
+  // The order is the home screen's order, and it is the order a loan happens
+  // in: what you own, what you have lent, who you lend to. Somebody who scrolls
+  // the hub and then opens the menu should find the same four things in the
+  // same sequence, not a second arrangement of them.
   { href: "/home?as=lender", label: "Home" },
-  { href: "/dashboard?as=lender", label: "Agreements" },
   { href: "/assets", label: "Things you lend" },
+  { href: "/dashboard?as=lender", label: "Agreements" },
   { href: "/contacts", label: "People" },
 ];
 
