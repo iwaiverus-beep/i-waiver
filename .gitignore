@@ -31,4 +31,14 @@ Thumbs.db
 tsconfig.tsbuildinfo
 
 .vercel
+
+# Everything env-shaped is ignored by default, so a new .env.something cannot be
+# committed by accident. The template is the single exception, named exactly
+# rather than by a pattern: `!.env*.example` would also un-ignore a file somebody
+# creates while debugging, and the whole point of the blanket rule is that
+# nothing gets out unless it was named on purpose.
+#
+# .env.local.example must never contain a real value. It is generated from
+# .env.local with every value stripped.
 .env*
+!.env.local.example
