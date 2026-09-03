@@ -30,7 +30,9 @@ export default async function ContactsPage() {
   return (
     <Container className={PAGE_PADDING}>
       <AppNav />
-      <PageIntro title="People you lend to">
+      {/* Open while the list is empty - see the note on the same line in
+          app/(app)/assets/page.tsx. */}
+      <PageIntro title="People you lend to" defaultOpen={contacts.length === 0}>
         Saved so you are not retyping a phone number every time. These details are
         copied onto an agreement when you create one — editing someone here never
         changes an agreement they have already signed.

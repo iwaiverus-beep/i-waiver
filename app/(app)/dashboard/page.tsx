@@ -90,7 +90,10 @@ export default async function DashboardPage({
       {/* Deliberately does not explain drafts or archiving. Both already have
           their own note further down, shown only to a reader who has one — saying
           it twice on the same screen teaches nobody anything the second time. */}
-      <PageIntro title="Your agreements" defaultOpen>
+      <PageIntro
+        title="Your agreements"
+        defaultOpen={counts.active === 0 && counts.archived === 0}
+      >
         Everything you have lent, are lending, or have asked somebody to sign for,
         newest first. Search or filter to narrow it down; a finished agreement
         stays on the list until you file it away.

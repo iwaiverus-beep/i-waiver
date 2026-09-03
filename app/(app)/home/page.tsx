@@ -125,6 +125,28 @@ export default async function HomePage({
 
   const pending = awaitingMe.map(toPending);
 
+  /**
+   * A hub with nothing in it is not a hub, it is three ways of saying "no".
+   *
+   * Until two of the three sections have something in them, this screen sends
+   * the reader to the form instead. Two rather than one, because the first loan
+   * fills more than one section by itself — describing the jet ski on the form
+   * saves it to Things you lend, and ticking "save this person" saves the
+   * borrower — so a lender with exactly one section filled has typically not
+   * finished anything yet. The moment they have, the hub has enough to show and
+   * this stops.
+   *
+   * A signature they owe outranks it. Being sent to a blank form while an
+   * agreement sits unsigned would bury the one thing on this screen that cannot
+   * wait, so anybody in that state gets the home screen and its dialog.
+   */
+  const filledSections =
+    ((assetCount ?? 0) > 0 ? 1 : 0) +
+    (agreements.total > 0 ? 1 : 0) +
+    ((contactCount ?? 0) > 0 ? 1 : 0);
+
+  if (filledSections < 2 && pending.length === 0) redirect("/agreements/new");
+
   return (
     <Container className={PAGE_PADDING}>
       <AppNav />

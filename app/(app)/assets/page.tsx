@@ -70,7 +70,10 @@ export default async function AssetsPage({
   return (
     <Container className={PAGE_PADDING}>
       <AppNav />
-      <PageIntro title="Things you lend">
+      {/* Open when the list is empty. The sentence is furniture to somebody who
+          has read it and has forty things saved; it is the whole screen to
+          somebody who has none and is deciding whether to start. */}
+      <PageIntro title="Things you lend" defaultOpen={assets.length === 0}>
         Save what you lend once and pick it from a list each time. Details are
         frozen onto an agreement when you send it, so changing a value here later
         never alters an agreement already signed.
