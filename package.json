@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "check:import": "node --conditions=react-server scripts/check-contact-import.mts"
   },
   "dependencies": {
     "@simplewebauthn/browser": "^13.3.0",

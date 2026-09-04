@@ -41,8 +41,9 @@ export default async function ContactsPage() {
       {contacts.length === 0 && (
         <div className="mt-8">
           <Empty>
-            Nobody saved yet. Add someone here, or let them be saved automatically
-            the first time you send them an agreement.
+            Nobody saved yet. Add someone here, import a list you already keep
+            in a spreadsheet, or let them be saved automatically the first time
+            you send them an agreement.
           </Empty>
         </div>
       )}

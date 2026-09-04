@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { ContactImport } from "./ContactImport";
 import { DeviceContactPicker } from "./DeviceContactPicker";
 import { ContactHistory } from "./ContactHistory";
 
@@ -21,9 +22,12 @@ const input =
 /**
  * The address book screen.
  *
- * Three ways in, because the phone-only route does not exist on every phone:
- * type it, pull it from the device picker where that API exists, or let it be
- * saved automatically when an agreement is created. And one way out that works
+ * Four ways in, because no single one of them reaches everybody: type it, pull
+ * it from the device picker where that API exists, import a spreadsheet, or let
+ * it be saved automatically when an agreement is created. The import is the one
+ * that matters on day one — somebody arriving with a list of forty people they
+ * already lend to should not have to type it in to find out whether this
+ * product is any good. And one way out that works
  * everywhere — the vCard download, which the OS turns into its own Add Contact
  * sheet.
  *
@@ -37,6 +41,7 @@ export function ContactsManager({ initial }: { initial: Contact[] }) {
   const [adding, setAdding] = useState(initial.length === 0);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [historyId, setHistoryId] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
   const [query, setQuery] = useState("");
 
   const visible = useMemo(() => {
@@ -50,6 +55,21 @@ export function ContactsManager({ initial }: { initial: Contact[] }) {
         .includes(needle),
     );
   }, [contacts, query]);
+
+  /**
+   * Restock the list after an import.
+   *
+   * Re-read rather than merged from the response: an import can add hundreds of
+   * rows and the server already knows the order this screen wants them in
+   * (recently used first, then by name). Rebuilding that here would be a second
+   * implementation of the ordering, and the two would drift.
+   */
+  async function reload() {
+    const response = await fetch("/api/contacts");
+    if (!response.ok) return;
+    const body = await response.json();
+    setContacts((body.contacts ?? []) as Contact[]);
+  }
 
   function absorb(saved: Contact) {
     setContacts((current) => {
@@ -72,25 +92,53 @@ export function ContactsManager({ initial }: { initial: Contact[] }) {
 
   return (
     <div className="mt-10">
-      {!adding && (
-        <div className="flex flex-wrap items-center gap-3">
+      {/*
+        One panel at a time. Opening either closes the other, because on a new
+        account the add form starts open and the import panel would have appeared
+        beneath it — two forms asking for the same thing in two different ways,
+        stacked, which reads as a broken screen rather than as a choice.
+      */}
+      <div className="flex flex-wrap items-center gap-3">
+        {!adding && (
           <button
-            onClick={() => setAdding(true)}
+            onClick={() => {
+              setAdding(true);
+              setImporting(false);
+            }}
             className="rounded-full bg-accent px-5 py-2.5 text-sm font-semibold text-paper transition-colors hover:bg-accent-hover"
           >
             Add someone
           </button>
-          {contacts.length > 0 && (
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search by name, email or phone"
-              type="search"
-              aria-label="Search people"
-              className="w-full max-w-xs rounded-full border border-line bg-paper px-4 py-2.5 text-sm text-ink outline-none focus:border-accent"
-            />
-          )}
-        </div>
+        )}
+        {!importing && (
+          <button
+            onClick={() => {
+              setImporting(true);
+              setAdding(false);
+            }}
+            className="rounded-full border border-line px-5 py-2.5 text-sm font-semibold text-ink-soft transition-colors hover:bg-surface hover:text-ink"
+          >
+            Import a list
+          </button>
+        )}
+        {contacts.length > 0 && !adding && !importing && (
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search by name, email or phone"
+            type="search"
+            aria-label="Search people"
+            className="w-full max-w-xs rounded-full border border-line bg-paper px-4 py-2.5 text-sm text-ink outline-none focus:border-accent"
+          />
+        )}
+      </div>
+
+      {importing && (
+        <ContactImport
+          existing={contacts}
+          onImported={() => void reload()}
+          onClose={() => setImporting(false)}
+        />
       )}
 
       {adding && (
