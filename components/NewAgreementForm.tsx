@@ -19,6 +19,7 @@ import {
 import { DeviceContactPicker } from "./DeviceContactPicker";
 import type { Asset } from "./AssetsManager";
 import type { Contact } from "./ContactsManager";
+import { ContactPicker } from "./ContactPicker";
 
 export type OpenState = {
   state: string;
@@ -556,22 +557,20 @@ export function NewAgreementForm({
           hint="They will get an email with a link. They do not need an account and will never be asked to make one."
         />
 
+        {/*
+          A dropdown under ten people and a type-ahead over it. The control is
+          chosen by how long the list is rather than by a setting — see the
+          header of ContactPicker for why neither one is right at both sizes.
+        */}
         {contacts.length > 0 && (
-          <Field label="Someone you have lent to before" wide>
-            <select
-              value={contactId}
-              onChange={(e) => chooseContact(e.target.value)}
-              className={input}
-            >
-              <option value="">Someone new…</option>
-              {contacts.map((contact) => (
-                <option key={contact.id} value={contact.id}>
-                  {contact.display_name}
-                  {contact.email ? ` — ${contact.email}` : ""}
-                </option>
-              ))}
-            </select>
-          </Field>
+          <ContactPicker
+            contacts={contacts}
+            value={contactId}
+            onChange={chooseContact}
+            label="Someone you have lent to before"
+            className={input}
+            wide
+          />
         )}
 
         <DeviceContactPicker
@@ -584,7 +583,7 @@ export function NewAgreementForm({
         />
 
         <div className="grid gap-5 sm:grid-cols-2">
-          <Field label="Their name">
+          <Field label="Their name (new person)">
             <input
               value={borrowerName}
               onChange={(e) => setBorrowerName(e.target.value)}
